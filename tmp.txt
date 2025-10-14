@@ -1,0 +1,37 @@
+An error occurred while synchronizing metadata. Please try run "STM32Cube: Install prerequisite bundle" and "STM32Cube: Synchronize pack list". Or work offline.
+
+
+if (dist >= 300.0) {
+      OLED_ShowString(10, 30, "TOO FAR", 16, 1);
+      // OLED_ShowChinese(0, 20, 0, 24, 1);  // 24*24 太
+      // OLED_ShowChinese(25, 20, 1, 24, 1); // 24*24 远
+      // OLED_ShowChinese(50, 20, 2, 24, 1); // 24*24 啦
+      OLED_Refresh();
+      HAL_Delay(500);
+      if (before != 1) {
+        OLED_Clear();
+        before = 1;
+      }
+      // OLED_Clear();
+    } else if (dist <= 4.0) {
+      OLED_ShowString(10, 30, "TOO CLOSE", 16, 1);
+      // OLED_ShowChinese(0, 20, 0, 24, 1);  // 24*24 太
+      // OLED_ShowChinese(25, 20, 3, 24, 1); // 24*24 近
+      // OLED_ShowChinese(50, 20, 2, 24, 1); // 24*24 啦
+      OLED_Refresh();
+      HAL_Delay(500);
+      if (before != 2) {
+        OLED_Clear();
+        before = 2;
+      }
+      // OLED_Clear();
+    } else {
+      sprintf((char *)mes, " DIST:%.1f cm ", dist);
+      OLED_ShowString(20, 30, mes, 16, 1);
+      OLED_Refresh();
+      HAL_Delay(500);
+      if (before != 3) {
+        OLED_Clear();
+        before = 3;
+      }
+    }
