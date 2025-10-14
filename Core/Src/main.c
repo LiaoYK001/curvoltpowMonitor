@@ -22,7 +22,6 @@
 #include "gpio.h"
 #include "i2c.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "delay.h"
@@ -137,7 +136,8 @@ int main(void) {
   while (1) {
 
     /* USER CODE END WHILE */
-
+    HAL_Delay(1000);
+    HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
