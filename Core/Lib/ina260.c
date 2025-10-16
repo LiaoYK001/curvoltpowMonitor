@@ -21,6 +21,8 @@ static ina260_device_t ina260_device = {0};
 /* private function prototypes */
 static int ina260_write_config(void);
 static int ina260_read_mask_enable(ina260_mask_enable_t *mask_en);
+static int i2c_read(uint8_t addr, uint16_t *data, uint8_t data_len);
+static int i2c_write(uint8_t addr, uint16_t *data, uint8_t data_len);
 
 /* exported functions */
 
@@ -503,6 +505,10 @@ static int i2c_write(uint8_t addr, uint16_t *data, uint8_t data_len) {
   return HAL_I2C_Mem_Write(&hi2c2, ina260_device.i2c_addr << 1, (uint16_t)addr,
                            I2C_MEMADD_SIZE_8BIT, (uint8_t *)data, data_len,
                            100);
+}
+
+int ina260_init_default(uint8_t addr) {
+  return ina260_init(i2c_read, i2c_write, addr);
 }
 
 // static int i2c_read(uint8_t addr, uint16_t *data, uint8_t data_len) {

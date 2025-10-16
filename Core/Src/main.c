@@ -28,7 +28,9 @@
 #include "ina260.h"
 #include "oled.h"
 #include "stdio.h"
+#include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 /* USER CODE END Includes */
 
@@ -122,21 +124,28 @@ int main(void) {
   OLED_CN(0, 52, 4, 12, 1, 4);
   OLED_ShowString(50, 52, codecyh, 12, 1);
   OLED_Refresh();
-  HAL_Delay(5000);
+  HAL_Delay(3000);
   OLED_Clear();
 
   // 初始化 INA260 引用和参考: https://github.com/xupenghu/ina260
-  int ret = ina260_init(NULL, NULL, INA260_SLAVE_ADDRESS);
+  int ret = ina260_init_default(INA260_SLAVE_ADDRESS);
 
   OLED_Clear();
   if (ret == INA_STATUS_OK) {
-    OLED_ShowString(0, 0, (uint8_t *)"INA260 OK", 12, 1);
+    OLED_ShowString(0, 0, (uint8_t *)"INA260 OK", 16, 1);
 
     // 配置工作模式
+    // operating_type: iotPower (default) - 同时测电流和电压
+    // operating_mode: iomContinuous (default) - 连续测量
+    // current_ctime: ictConvert1p1ms (default) - 电流转换时间 1.1ms
+    // voltage_ctime: ivtConvert1p1ms (default) - 电压转换时间 1.1ms
+    // sample_size: issSample512 - 512次采样取平均值
+    // 总采样时间 = 采样次数 * 转换时间
     ina260_set_config(iotPower, iomContinuous, ictConvert1p1ms, ictConvert1p1ms,
-                      issSample1);
+                      issSample512);
+
   } else {
-    OLED_ShowString(0, 0, (uint8_t *)"INA260 ERR", 12, 1);
+    OLED_ShowString(0, 0, (uint8_t *)"INA260 ERR", 16, 1);
   }
   OLED_Refresh();
   HAL_Delay(2000);
@@ -158,30 +167,48 @@ int main(void) {
     float voltage_mv = 0;
     float current_ma = 0;
     float power_mw = 0;
-    char buffer[20];
+    char buffer[32];
 
     // 读取并显示电压
     if (ina260_get_voltage(&voltage_mv) == INA_STATUS_OK) {
-      sprintf(buffer, "V:%.2fmV", voltage_mv);
-      OLED_ShowString(0, 0, (uint8_t *)buffer, 12, 1);
+      if (voltage_mv > 1000) {
+        sprintf(buffer, " V:%.2fV    ", voltage_mv / 1000.0f); // 大于1V转换为V
+      } else {
+        sprintf(buffer, " V:%.2fmV    ", voltage_mv);
+      }
+      OLED_ShowString(0, 0, (uint8_t *)buffer, 16, 1);
     }
 
     // 读取并显示电流
     if (ina260_get_current(&current_ma) == INA_STATUS_OK) {
-      sprintf(buffer, "I:%.2fmA", current_ma);
-      OLED_ShowString(0, 16, (uint8_t *)buffer, 12, 1);
+      if (fabs(current_ma) > 1000) { // INA260测量电流可能为负值，取绝对值判断
+        sprintf(buffer, " I:%.2fA    ", current_ma / 1000.0f); // 大于1A转换为A
+      } else {
+        sprintf(buffer, " I:%.2fmA    ", current_ma);
+      }
+      OLED_ShowString(0, 18, (uint8_t *)buffer, 16, 1);
     }
 
     // 读取并显示功率
-    if (ina260_get_power(&power_mw) == INA_STATUS_OK) {
-      sprintf(buffer, "P:%.2fmW", power_mw);
-      OLED_ShowString(0, 32, (uint8_t *)buffer, 12, 1);
+    // if (ina260_get_power(&power_mw) == INA_STATUS_OK) {
+    //   sprintf(buffer, " P:%.2fmW   ", power_mw);
+    //   OLED_ShowString(0, 36, (uint8_t *)buffer, 16, 1);
+    // }
+
+    // 更高位数计算功率
+    power_mw = (voltage_mv * current_ma) / 1000.0f; // mW
+    if (power_mw > 1000) {
+      sprintf(buffer, " P:%.3fW    ", power_mw / 1000.0f); // 大于1W转换为W
+    } else {
+      sprintf(buffer, " P:%.3fmW    ", power_mw);
     }
+    OLED_ShowString(0, 36, (uint8_t *)buffer, 16, 1);
 
     OLED_Refresh();
-    /* USER CODE END WHILE */
     HAL_Delay(1000);
     HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
+
+    /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

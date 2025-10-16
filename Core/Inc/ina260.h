@@ -12,8 +12,7 @@
 #define _INA260__H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #include "stdint.h"
@@ -28,7 +27,7 @@ extern "C"
 #define INA260_REG_MFG_ID 0xFE
 #define INA260_REG_DEV_ID 0xFF
 
-  // -- register LSB values --
+// -- register LSB values --
 #define INA260_LSB_CURRENT 1.25F
 #define INA260_LSB_VOLTAGE 1.25F
 #define INA260_LSB_POWER 10.00F
@@ -55,33 +54,31 @@ extern "C"
 #define INA_STATUS_TIMEOUT (-2U)
 
 // convert value at addr to little-endian (16-bit)
-#define __LEu16(addr)                            \
-  (((((uint16_t)(*(((uint8_t *)(addr)) + 1)))) | \
+#define __LEu16(addr)                                                          \
+  (((((uint16_t)(*(((uint8_t *)(addr)) + 1)))) |                               \
     (((uint16_t)(*(((uint8_t *)(addr)) + 0))) << 8U)))
 
 // convert value at addr to little-endian (32-bit)
-#define __LEu32(addr)                                   \
-  (((((uint32_t)(*(((uint8_t *)(addr)) + 3)))) |        \
-    (((uint32_t)(*(((uint8_t *)(addr)) + 2))) << 8U) |  \
-    (((uint32_t)(*(((uint8_t *)(addr)) + 1))) << 16U) | \
+#define __LEu32(addr)                                                          \
+  (((((uint32_t)(*(((uint8_t *)(addr)) + 3)))) |                               \
+    (((uint32_t)(*(((uint8_t *)(addr)) + 2))) << 8U) |                         \
+    (((uint32_t)(*(((uint8_t *)(addr)) + 1))) << 16U) |                        \
     (((uint32_t)(*(((uint8_t *)(addr)) + 0))) << 24U)))
 
 // swap two values `a` and `b` with a given type `t`
-#define __SWAP(t, a, b) \
-  {                     \
-    t s;                \
-    s = a;              \
-    a = b;              \
-    b = s;              \
+#define __SWAP(t, a, b)                                                        \
+  {                                                                            \
+    t s;                                                                       \
+    s = a;                                                                     \
+    a = b;                                                                     \
+    b = s;                                                                     \
   }
 
 // format of the MASK/ENABLE register (06h)
 /* TODO: add ALRT support */
-typedef union
-{
+typedef union {
   uint16_t u16;
-  struct
-  {
+  struct {
     uint8_t alert_latch_enable : 1;  //  0
     uint8_t alert_polarity : 1;      //  1
     uint8_t math_overflow : 1;       //  2
@@ -98,11 +95,9 @@ typedef union
 } ina260_mask_enable_t;
 
 // format of the DEVICE_ID register (FFh)
-typedef union
-{
+typedef union {
   uint16_t u16;
-  struct
-  {
+  struct {
     uint8_t revision : 4;
     uint16_t device : 12;
   };
@@ -111,8 +106,7 @@ typedef union
 // determines the number of samples that are collected and averaged. each sample
 // requires a given amount of ADC conversion time, and there are only a small
 // number of discrete times that may be selected (see ina260_conversion_time_t).
-typedef enum
-{
+typedef enum {
   issSample1,    // = 0 (000b) -- default
   issSample4,    // = 1 (001b)
   issSample16,   // = 2 (010b)
@@ -129,8 +123,7 @@ typedef enum
 // the total time required for a single measurement is calculated as selected
 // conversion time (ina260_conversion_time_t) multiplied by the selected number
 // of samples (ina260_sample_size_t).
-typedef enum
-{
+typedef enum {
   ictConvert140us,   // = 0 (000b)
   ictConvert204us,   // = 1 (001b)
   ictConvert332us,   // = 2 (010b)
@@ -144,8 +137,7 @@ typedef enum
 // determines how measurements should be performed and updated in internal
 // data registers. you can read the contents at any time in both modes, but
 // this will affect when they update.
-typedef enum
-{
+typedef enum {
   iomTriggered,  // = 0 (000b)
   iomContinuous, // = 1 (001b) -- default
 } ina260_operating_mode_t;
@@ -155,8 +147,7 @@ typedef enum
 // bit patterns result in the following equalities:
 //   iotShutdown == 0
 //   iotPower    == ( iotVoltage | iotCurrent )
-typedef enum
-{
+typedef enum {
   iotShutdown, // = 0 (000b)
   iotCurrent,  // = 1 (001b)
   iotVoltage,  // = 2 (010b)
@@ -164,11 +155,9 @@ typedef enum
 } ina260_operating_type_t;
 
 // format of CONFIGURATION register (00h)
-typedef union
-{
+typedef union {
   uint16_t u16;
-  struct
-  {
+  struct {
     ina260_operating_type_t type : 2;   //  0 -  1
     ina260_operating_mode_t mode : 1;   //  2
     ina260_conversion_time_t ctime : 3; //  3 -  5
@@ -182,8 +171,7 @@ typedef union
 typedef int (*i2c_func)(uint8_t addr, uint16_t *data, uint8_t data_len);
 
 // struct definition for primary device type
-typedef struct _ina260_device_t
-{
+typedef struct _ina260_device_t {
   i2c_func i2c_read;
   i2c_func i2c_write;
   uint8_t i2c_addr;
@@ -211,7 +199,7 @@ int ina260_conversion_start(void);
 int ina260_get_voltage(float *voltage);
 int ina260_get_current(float *current);
 int ina260_get_power(float *power);
-
+int ina260_init_default(uint8_t addr); // 添加初始化函数
 #ifdef __cplusplus
 }
 #endif
