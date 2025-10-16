@@ -8,6 +8,8 @@
  * 2021-01-30     xph    first version
  */
 #include "ina260.h"
+#include "i2c.h"
+#include "main.h"
 #include <stdlib.h>
 
 /* pre-defined device ID per datasheet */
@@ -488,3 +490,29 @@ static int ina260_read_mask_enable(ina260_mask_enable_t *mask_en) {
 
   return INA_STATUS_OK;
 }
+
+// I2C read and write functions using HAL library
+// 引用:https://github.com/xupenghu/ina260
+
+static int i2c_read(uint8_t addr, uint16_t *data, uint8_t data_len) {
+  return HAL_I2C_Mem_Read(&hi2c2, ina260_device.i2c_addr << 1, (uint16_t)addr,
+                          I2C_MEMADD_SIZE_8BIT, (uint8_t *)data, data_len, 100);
+}
+
+static int i2c_write(uint8_t addr, uint16_t *data, uint8_t data_len) {
+  return HAL_I2C_Mem_Write(&hi2c2, ina260_device.i2c_addr << 1, (uint16_t)addr,
+                           I2C_MEMADD_SIZE_8BIT, (uint8_t *)data, data_len,
+                           100);
+}
+
+// static int i2c_read(uint8_t addr, uint16_t *data, uint8_t data_len) {
+//   return HAL_I2C_Mem_Read(&hi2c2, ina260_device.i2c_addr, (uint16_t)addr,
+//                           I2C_MEMADD_SIZE_8BIT, (uint8_t *)data, data_len,
+//                           100);
+// }
+
+// static int i2c_write(uint8_t addr, uint16_t *data, uint8_t data_len) {
+//   return HAL_I2C_Mem_Write(&hi2c2, ina260_device.i2c_addr, (uint16_t)addr,
+//                            I2C_MEMADD_SIZE_8BIT, (uint8_t *)data, data_len,
+//                            100);
+// }

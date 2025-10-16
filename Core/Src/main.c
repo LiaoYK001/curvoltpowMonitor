@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "delay.h"
+#include "ina260.h"
 #include "oled.h"
 #include "stdio.h"
 #include <stdint.h>
@@ -99,6 +100,7 @@ int main(void) {
   MX_I2C2_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+
   // u8 t = ' ';
   delay_init();
   HAL_Delay(30); // for OLED screen initial
@@ -123,18 +125,60 @@ int main(void) {
   HAL_Delay(5000);
   OLED_Clear();
 
+  // 初始化 INA260 引用和参考: https://github.com/xupenghu/ina260
+  int ret = ina260_init(NULL, NULL, INA260_SLAVE_ADDRESS);
+
+  OLED_Clear();
+  if (ret == INA_STATUS_OK) {
+    OLED_ShowString(0, 0, (uint8_t *)"INA260 OK", 12, 1);
+
+    // 配置工作模式
+    ina260_set_config(iotPower, iomContinuous, ictConvert1p1ms, ictConvert1p1ms,
+                      issSample1);
+  } else {
+    OLED_ShowString(0, 0, (uint8_t *)"INA260 ERR", 12, 1);
+  }
+  OLED_Refresh();
+  HAL_Delay(2000);
+
+  // LED7显示
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_SET);
   // uint8_t mes[30] = "";
 
   SystemCoreClockUpdate(); // 确保 SystemCoreClock 正确
   DWT_Delay_Init();        // 微秒档位初始化 delay.c
 
+  OLED_Clear();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
+    // 读取 INA260 数据 引用和参考: https://github.com/xupenghu/ina260
+    float voltage_mv = 0;
+    float current_ma = 0;
+    float power_mw = 0;
+    char buffer[20];
 
+    // 读取并显示电压
+    if (ina260_get_voltage(&voltage_mv) == INA_STATUS_OK) {
+      sprintf(buffer, "V:%.2fmV", voltage_mv);
+      OLED_ShowString(0, 0, (uint8_t *)buffer, 12, 1);
+    }
+
+    // 读取并显示电流
+    if (ina260_get_current(&current_ma) == INA_STATUS_OK) {
+      sprintf(buffer, "I:%.2fmA", current_ma);
+      OLED_ShowString(0, 16, (uint8_t *)buffer, 12, 1);
+    }
+
+    // 读取并显示功率
+    if (ina260_get_power(&power_mw) == INA_STATUS_OK) {
+      sprintf(buffer, "P:%.2fmW", power_mw);
+      OLED_ShowString(0, 32, (uint8_t *)buffer, 12, 1);
+    }
+
+    OLED_Refresh();
     /* USER CODE END WHILE */
     HAL_Delay(1000);
     HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
