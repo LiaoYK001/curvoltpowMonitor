@@ -22,7 +22,6 @@
 #include "gpio.h"
 #include "i2c.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "delay.h"

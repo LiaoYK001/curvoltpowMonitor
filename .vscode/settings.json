@@ -3,9 +3,6 @@
     "cmake.configureArgs": [
         "-DCMAKE_COMMAND=cube-cmake"
     ],
-    "cmake.preferredGenerators": [
-        "Ninja"
-    ],
     "stm32cube-ide-clangd.path": "cube",
     "stm32cube-ide-clangd.arguments": [
         "starm-clangd",
