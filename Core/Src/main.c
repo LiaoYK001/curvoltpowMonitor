@@ -131,8 +131,9 @@ int main(void) {
   int ret = ina260_init_default(INA260_SLAVE_ADDRESS);
 
   OLED_Clear();
+  OLED_CN(28, 6, 6, 12, 1, 1);
   if (ret == INA_STATUS_OK) {
-    OLED_ShowString(0, 0, (uint8_t *)"INA260 OK", 16, 1);
+    OLED_ShowString(0, 24, (uint8_t *)"INA260 OK", 16, 1);
 
     // 配置工作模式
     // operating_type: iotPower (default) - 同时测电流和电压
@@ -145,7 +146,7 @@ int main(void) {
                       issSample512);
 
   } else {
-    OLED_ShowString(0, 0, (uint8_t *)"INA260 ERR", 16, 1);
+    OLED_ShowString(0, 24, (uint8_t *)"INA260 ERR", 16, 1);
   }
   OLED_Refresh();
   HAL_Delay(2000);
@@ -158,6 +159,7 @@ int main(void) {
   DWT_Delay_Init();        // 微秒档位初始化 delay.c
 
   OLED_Clear();
+  OLED_CN(28, 6, 6, 12, 1, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -176,7 +178,7 @@ int main(void) {
       } else {
         sprintf(buffer, " V:%.2fmV    ", voltage_mv);
       }
-      OLED_ShowString(0, 0, (uint8_t *)buffer, 16, 1);
+      OLED_ShowString(0, 18, (uint8_t *)buffer, 12, 1);
     }
 
     // 读取并显示电流
@@ -186,7 +188,7 @@ int main(void) {
       } else {
         sprintf(buffer, " I:%.2fmA    ", current_ma);
       }
-      OLED_ShowString(0, 18, (uint8_t *)buffer, 16, 1);
+      OLED_ShowString(0, 18 + 14, (uint8_t *)buffer, 12, 1);
     }
 
     // 读取并显示功率
@@ -202,7 +204,7 @@ int main(void) {
     } else {
       sprintf(buffer, " P:%.3fmW    ", power_mw);
     }
-    OLED_ShowString(0, 36, (uint8_t *)buffer, 16, 1);
+    OLED_ShowString(0, 18 + 2 * 14, (uint8_t *)buffer, 12, 1);
 
     OLED_Refresh();
     HAL_Delay(1000);
