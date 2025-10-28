@@ -18,16 +18,17 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "adc.h"
 #include "gpio.h"
 #include "i2c.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "Key4x4.h"
 #include "delay.h"
 #include "ina260.h"
 #include "oled.h"
 #include "stdio.h"
+#include "string.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -52,20 +53,166 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+uint32_t last_oled_update = 0;              // 上次 OLED 更新时间
+const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms
 
+// 输入状态机
+typedef enum {
+  INPUT_IDLE = 0, // 空闲状态
+  INPUT_VOLTAGE,  // 输入电压中
+  INPUT_CURRENT   // 输入电流中
+} InputState_t;
+
+InputState_t input_state = INPUT_IDLE;
+char input_buffer[10] = {0}; // 输入缓冲区
+uint8_t input_index = 0;     // 输入位置
+
+float SetVoltage = 0.00f; // 设定电压 (V)
+float SetCurrent = 0.00f; // 设定电流 (A)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+static void Process_Key_Input(char key);
+static void Clear_Input_Buffer(void);
+static void Display_Input_Prompt(void);
+static uint8_t Validate_And_Set_Value(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// void MX_TIM1_Init(void) { htim1.Init.Prescaler = 144 - 1; }
-// 已经通过CubeMX在tim.c修改
+/**
+ * @brief  清空输入缓冲区
+ */
+static void Clear_Input_Buffer(void) {
+  memset(input_buffer, 0, sizeof(input_buffer));
+  input_index = 0;
+}
+
+/**
+ * @brief  显示输入提示
+ */
+static void Display_Input_Prompt(void) {
+  char prompt[32];
+
+  if (input_state == INPUT_VOLTAGE) {
+    sprintf(prompt, "SetV:%s_       ", input_buffer);
+    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+  } else if (input_state == INPUT_CURRENT) {
+    sprintf(prompt, "SetI:%s_       ", input_buffer);
+    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+  }
+  OLED_Refresh();
+}
+
+/**
+ * @brief  验证并设置数值
+ * @retval 1: 成功, 0: 失败
+ */
+static uint8_t Validate_And_Set_Value(void) {
+  float value = atof(input_buffer);
+  char msg[32];
+
+  if (input_state == INPUT_VOLTAGE) {
+    // 验证范围 0.00 - 16.00 V
+    if (value < 0.0f || value > 16.0f) {
+      sprintf(msg, "V ERR:0-16V    ");
+      OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
+      OLED_Refresh();
+      HAL_Delay(2000);
+      return 0;
+    }
+    SetVoltage = value;
+    sprintf(msg, "SetV:%.2fV OK   ", SetVoltage);
+
+  } else if (input_state == INPUT_CURRENT) {
+    // 验证范围 0.00 - 5.00 A
+    if (value < 0.0f || value > 5.0f) {
+      sprintf(msg, "I ERR:0-5A     ");
+      OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
+      OLED_Refresh();
+      HAL_Delay(2000);
+      return 0;
+    }
+    SetCurrent = value;
+    sprintf(msg, "SetI:%.2fA OK   ", SetCurrent);
+  }
+
+  OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
+  OLED_Refresh();
+  HAL_Delay(1500);
+
+  return 1;
+}
+
+/**
+ * @brief  处理按键输入
+ * @param  key: 按键字符
+ */
+static void Process_Key_Input(char key) {
+  switch (input_state) {
+  case INPUT_IDLE:
+    if (key == 'A') {
+      // 开始输入电压
+      input_state = INPUT_VOLTAGE;
+      Clear_Input_Buffer();
+      Display_Input_Prompt();
+    } else if (key == 'B') {
+      // 开始输入电流
+      input_state = INPUT_CURRENT;
+      Clear_Input_Buffer();
+      Display_Input_Prompt();
+    } else if (key == 'C') {
+      // 取消/清除设定值
+      SetVoltage = 0.0f;
+      SetCurrent = 0.0f;
+      OLED_ShowString(0, 54, (uint8_t *)"Clear OK       ", 8, 1);
+      OLED_Refresh();
+      HAL_Delay(1000);
+    }
+    break;
+
+  case INPUT_VOLTAGE:
+  case INPUT_CURRENT:
+    if (key == 'E') {
+      // 确认输入
+      if (input_index > 0) {
+        if (Validate_And_Set_Value()) {
+          input_state = INPUT_IDLE;
+          Clear_Input_Buffer();
+        } else {
+          // 验证失败,重新输入
+          Clear_Input_Buffer();
+          Display_Input_Prompt();
+        }
+      }
+    } else if (key == '*') {
+      // 退格/取消
+      input_state = INPUT_IDLE;
+      Clear_Input_Buffer();
+      OLED_ShowString(0, 54, (uint8_t *)"Cancel         ", 8, 1);
+      OLED_Refresh();
+      HAL_Delay(1000);
+    } else if ((key >= '0' && key <= '9') || key == '.') {
+      // 数字或小数点
+      if (input_index < 8) { // 限制输入长度
+        // 检查小数点重复
+        if (key == '.') {
+          for (uint8_t i = 0; i < input_index; i++) {
+            if (input_buffer[i] == '.') {
+              return; // 已有小数点,忽略
+            }
+          }
+        }
+        input_buffer[input_index++] = key;
+        Display_Input_Prompt();
+      }
+    }
+    break;
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -100,7 +247,6 @@ int main(void) {
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
-  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
   // u8 t = ' ';
@@ -109,7 +255,9 @@ int main(void) {
   OLED_Init();
   OLED_ColorTurn(0);   // 0正常显示，1 反色显示
   OLED_DisplayTurn(1); // 0正常显示 1 屏幕翻转显示
-  // 取自中景园电子ZJY096I0400WG11技术资料(SSD1315)
+  // OLED部分代码参考取自中景园电子ZJY096I0400WG11技术资料(SSD1315)
+  KEY_4x4_Init(); // 初始化4x4矩阵键盘
+
   HAL_Delay(20);
   uint8_t codehyz[10] = "23211319";
   uint8_t codelyk[10] = "23211326";
@@ -165,51 +313,72 @@ int main(void) {
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    // 读取 INA260 数据 引用和参考: https://github.com/xupenghu/ina260
-    float voltage_mv = 0;
-    float current_ma = 0;
-    float power_mw = 0;
-    char buffer[32];
+    uint32_t current_time = HAL_GetTick();
 
-    // 读取并显示电压
-    if (ina260_get_voltage(&voltage_mv) == INA_STATUS_OK) {
-      if (voltage_mv > 1000) {
-        sprintf(buffer, " V:%.2fV    ", voltage_mv / 1000.0f); // 大于1V转换为V
-      } else {
-        sprintf(buffer, " V:%.2fmV    ", voltage_mv);
+    // 高频率扫描键盘
+    KEY_Scan();
+
+    if (Key_IsPressed()) {
+      uint16_t key_val = Key_Read();
+      char key = (char)key_val;
+
+      // 处理按键输入
+      Process_Key_Input(key);
+
+      Key_Clear();
+    }
+
+    // 定时更新 INA260 和 OLED 显示
+    if ((current_time - last_oled_update) >= OLED_UPDATE_INTERVAL) {
+      last_oled_update = current_time;
+
+      // 读取 INA260 数据
+      float voltage_mv = 0;
+      float current_ma = 0;
+      float power_mw = 0;
+      char buffer[32];
+
+      // 读取并显示电压
+      if (ina260_get_voltage(&voltage_mv) == INA_STATUS_OK) {
+        if (voltage_mv > 1000) {
+          sprintf(buffer, "SV:%.2fV V:%.2fV   ", SetVoltage,
+                  voltage_mv / 1000.0f);
+        } else {
+          sprintf(buffer, "SV:%.2fV V:%.0fmV   ", SetVoltage, voltage_mv);
+        }
+        OLED_ShowString(0, 18, (uint8_t *)buffer, 12, 1);
       }
-      OLED_ShowString(0, 18, (uint8_t *)buffer, 12, 1);
-    }
 
-    // 读取并显示电流
-    if (ina260_get_current(&current_ma) == INA_STATUS_OK) {
-      if (fabs(current_ma) > 1000) { // INA260测量电流可能为负值，取绝对值判断
-        sprintf(buffer, " I:%.2fA    ", current_ma / 1000.0f); // 大于1A转换为A
-      } else {
-        sprintf(buffer, " I:%.2fmA    ", current_ma);
+      // 读取并显示电流
+      if (ina260_get_current(&current_ma) == INA_STATUS_OK) {
+        if (fabs(current_ma) > 1000) {
+          sprintf(buffer, "SI:%.2fA I:%.2fA   ", SetCurrent,
+                  current_ma / 1000.0f);
+        } else {
+          sprintf(buffer, "SI:%.2fA I:%.0fmA   ", SetCurrent, current_ma);
+        }
+        OLED_ShowString(0, 18 + 14, (uint8_t *)buffer, 12, 1);
       }
-      OLED_ShowString(0, 18 + 14, (uint8_t *)buffer, 12, 1);
+
+      // 计算并显示功率
+      power_mw = (voltage_mv * current_ma) / 1000.0f;
+      if (power_mw > 1000) {
+        sprintf(buffer, " P:%.3fW    ", power_mw / 1000.0f);
+      } else {
+        sprintf(buffer, " P:%.3fmW    ", power_mw);
+      }
+      OLED_ShowString(0, 45, (uint8_t *)buffer, 8, 1);
+
+      // 只在非输入状态清除提示行
+      if (input_state == INPUT_IDLE) {
+        OLED_ShowString(0, 54, (uint8_t *)"               ", 8, 1);
+      }
+
+      OLED_Refresh();
+      HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
     }
 
-    // 读取并显示功率
-    // if (ina260_get_power(&power_mw) == INA_STATUS_OK) {
-    //   sprintf(buffer, " P:%.2fmW   ", power_mw);
-    //   OLED_ShowString(0, 36, (uint8_t *)buffer, 16, 1);
-    // }
-
-    // 更高位数计算功率
-    power_mw = (voltage_mv * current_ma) / 1000.0f; // mW
-    if (power_mw > 1000) {
-      sprintf(buffer, " P:%.3fW    ", power_mw / 1000.0f); // 大于1W转换为W
-    } else {
-      sprintf(buffer, " P:%.3fmW    ", power_mw);
-    }
-    OLED_ShowString(0, 18 + 2 * 14, (uint8_t *)buffer, 12, 1);
-
-    OLED_Refresh();
-    HAL_Delay(1000);
-    HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
-
+    HAL_Delay(20);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -224,7 +393,6 @@ int main(void) {
 void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
    * in the RCC_OscInitTypeDef structure.
@@ -250,11 +418,6 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
     Error_Handler();
   }
 }

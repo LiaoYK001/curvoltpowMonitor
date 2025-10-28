@@ -50,7 +50,23 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, KEY_ROW0_Pin|KEY_ROW1_Pin|KEY_ROW2_Pin|KEY_ROW3_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : KEY_ROW0_Pin KEY_ROW1_Pin KEY_ROW2_Pin KEY_ROW3_Pin */
+  GPIO_InitStruct.Pin = KEY_ROW0_Pin|KEY_ROW1_Pin|KEY_ROW2_Pin|KEY_ROW3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : KEY_COL0_Pin KEY_COL1_Pin KEY_COL2_Pin KEY_COL3_Pin */
+  GPIO_InitStruct.Pin = KEY_COL0_Pin|KEY_COL1_Pin|KEY_COL2_Pin|KEY_COL3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : a7led_Pin */
   GPIO_InitStruct.Pin = a7led_Pin;

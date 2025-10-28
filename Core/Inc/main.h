@@ -57,12 +57,24 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define VoltageADC_Pin GPIO_PIN_0
-#define VoltageADC_GPIO_Port GPIOA
-#define CurrenttoVoltADC_Pin GPIO_PIN_1
-#define CurrenttoVoltADC_GPIO_Port GPIOA
-#define a7led_Pin GPIO_PIN_7
-#define a7led_GPIO_Port GPIOA
+#define KEY_ROW0_Pin GPIO_PIN_0
+#define KEY_ROW0_GPIO_Port GPIOA
+#define KEY_ROW1_Pin GPIO_PIN_1
+#define KEY_ROW1_GPIO_Port GPIOA
+#define KEY_ROW2_Pin GPIO_PIN_2
+#define KEY_ROW2_GPIO_Port GPIOA
+#define KEY_ROW3_Pin GPIO_PIN_3
+#define KEY_ROW3_GPIO_Port GPIOA
+#define KEY_COL0_Pin GPIO_PIN_4
+#define KEY_COL0_GPIO_Port GPIOA
+#define KEY_COL1_Pin GPIO_PIN_5
+#define KEY_COL1_GPIO_Port GPIOA
+#define KEY_COL2_Pin GPIO_PIN_6
+#define KEY_COL2_GPIO_Port GPIOA
+#define KEY_COL3_Pin GPIO_PIN_7
+#define KEY_COL3_GPIO_Port GPIOA
+#define a7led_Pin GPIO_PIN_0
+#define a7led_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
