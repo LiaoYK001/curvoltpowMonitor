@@ -3,7 +3,9 @@
 #include "main.h"
 #include "stm32f1xx_hal.h"
 
+// anxia是是否按下
 uint8_t anxia = 0;
+// key是按下的键值索引
 uint8_t key = 0;
 
 // 行引脚定义 (输出) - 使用 CubeMX 生成的宏定义
@@ -32,15 +34,15 @@ const uint16_t keys[16] = {
 /**
  * @brief  初始化 4x4 矩阵键盘
  * @note   引脚已通过 CubeMX 配置,此函数仅设置初始状态
- *         如果未使用 CubeMX,需要取消注释下面的手动初始化代码
+ *
  */
 void KEY_4x4_Init(void) {
-  // CubeMX 已经初始化引脚,这里只设置初始状态
+  // CubeMX 已经初始化引脚,这里只设置初始状态:
   HAL_GPIO_WritePin(KEY_ROW0_GPIO_Port,
                     KEY_ROW0_Pin | KEY_ROW1_Pin | KEY_ROW2_Pin | KEY_ROW3_Pin,
                     GPIO_PIN_SET);
 
-  /* 如果没有使用 CubeMX,取消注释以下代码进行手动初始化:
+  /* 如果没有使用 CubeMX,以下代码进行手动初始化
 
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -103,7 +105,7 @@ static uint8_t KEY_Scan_Row(uint8_t row) {
                       (i == row) ? GPIO_PIN_RESET : GPIO_PIN_SET);
   }
 
-  // 短暂延迟让电平稳定
+  // 短暂延迟让电平稳定 10 微秒
   DWT_Delay_us(10);
 
   // 检查所有列

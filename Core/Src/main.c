@@ -53,19 +53,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint32_t last_oled_update = 0;              // 上次 OLED 更新时间
-const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms
+uint32_t last_oled_update = 0;              // 上次 OLED 更新时间计数
+const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms = 1s
 
-// 输入状态机
-typedef enum {
-  INPUT_IDLE = 0, // 空闲状态
-  INPUT_VOLTAGE,  // 输入电压中
-  INPUT_CURRENT   // 输入电流中
+// 输入状态机(用于处理按键输入设定电压和电流)
+typedef enum {    // enum是定义枚举类型的关键字
+  INPUT_IDLE = 0, // 空闲状态,从0开始
+  INPUT_VOLTAGE,  // 输入电压中INPUT_VOLTAGE = 1
+  INPUT_CURRENT   // 输入电流中INPUT_CURRENT = 2
 } InputState_t;
 
-InputState_t input_state = INPUT_IDLE;
-char input_buffer[10] = {0}; // 输入缓冲区
-uint8_t input_index = 0;     // 输入位置
+InputState_t input_state = INPUT_IDLE; // 当前输入状态
+char input_buffer[10] = {0};           // 输入缓冲区
+uint8_t input_index = 0;               // 输入位置
 
 float SetVoltage = 0.00f; // 设定电压 (V)
 float SetCurrent = 0.00f; // 设定电流 (A)
@@ -73,11 +73,11 @@ float SetCurrent = 0.00f; // 设定电流 (A)
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-/* USER CODE BEGIN PFP */
-static void Process_Key_Input(char key);
-static void Clear_Input_Buffer(void);
-static void Display_Input_Prompt(void);
-static uint8_t Validate_And_Set_Value(void);
+/* USER CODE BEGIN PFP PFP指的是私有函数原型 */
+static void Process_Key_Input(char key);     // 处理按键输入
+static void Clear_Input_Buffer(void);        // 清空输入缓冲区
+static void Display_Input_Prompt(void);      // 显示输入提示
+static uint8_t Validate_And_Set_Value(void); // 验证并设置数值
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -87,6 +87,12 @@ static uint8_t Validate_And_Set_Value(void);
  * @brief  清空输入缓冲区
  */
 static void Clear_Input_Buffer(void) {
+  // memset函数用于将一块内存空间全部设置为某个值，这里是将输入缓冲区清零
+  // 函数用于将一段内存区域设置为指定的值，通常用于初始化数组或结构体。
+  // 它按字节赋值，意味着*每个字节*都会被设置为指定的值。
+  // 当使用 memset 对非字符类型的数组进行赋值时，需要特别注意赋值的内容。
+  // 例如，对于 int 类型的数组，只有当赋值为 -1 或 0 时才能得到预期的结果。
+  // 这是因为 -1 和 0 在二进制中每一位都相同，所以每个字节都会被正确地赋值。
   memset(input_buffer, 0, sizeof(input_buffer));
   input_index = 0;
 }
@@ -96,54 +102,57 @@ static void Clear_Input_Buffer(void) {
  */
 static void Display_Input_Prompt(void) {
   char prompt[32];
-
   if (input_state == INPUT_VOLTAGE) {
-    sprintf(prompt, "SetV:%s_       ", input_buffer);
+    sprintf(prompt, "SetV:%s#           ", input_buffer);
     OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
   } else if (input_state == INPUT_CURRENT) {
-    sprintf(prompt, "SetI:%s_       ", input_buffer);
+    sprintf(prompt, "SetI:%s#           ", input_buffer);
     OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
   }
   OLED_Refresh();
 }
 
 /**
- * @brief  验证并设置数值
- * @retval 1: 成功, 0: 失败
+ * @brief  验证并设置数值 简要说明
+ * @retval 1: 成功, 0: 失败 返回说明
  */
 static uint8_t Validate_And_Set_Value(void) {
+  // atof函数用于将字符串转换为浮点数 ascii to floating point numbers
+  // 这里将输入缓冲区的字符串转换为浮点数来和范围进行比较
   float value = atof(input_buffer);
   char msg[32];
 
   if (input_state == INPUT_VOLTAGE) {
     // 验证范围 0.00 - 16.00 V
     if (value < 0.0f || value > 16.0f) {
-      sprintf(msg, "V ERR:0-16V    ");
+      sprintf(msg, "  Vset ERR:0-16V     ");
       OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
       OLED_Refresh();
       HAL_Delay(2000);
       return 0;
     }
+    // 若验证通过,设置变量
     SetVoltage = value;
-    sprintf(msg, "SetV:%.2fV OK   ", SetVoltage);
+    sprintf(msg, "  SetV:%.2fV OK     ", SetVoltage);
 
   } else if (input_state == INPUT_CURRENT) {
     // 验证范围 0.00 - 5.00 A
     if (value < 0.0f || value > 5.0f) {
-      sprintf(msg, "I ERR:0-5A     ");
+      sprintf(msg, "  Iset ERR:0-5A     ");
       OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
       OLED_Refresh();
       HAL_Delay(2000);
       return 0;
     }
+    // 若验证通过,设置变量
     SetCurrent = value;
-    sprintf(msg, "SetI:%.2fA OK   ", SetCurrent);
+    sprintf(msg, "  SetI:%.2fA OK     ", SetCurrent);
   }
-
+  // 展示成功信息和设定值
   OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
   OLED_Refresh();
   HAL_Delay(1500);
-
+  // 1: 成功
   return 1;
 }
 
@@ -153,6 +162,7 @@ static uint8_t Validate_And_Set_Value(void) {
  */
 static void Process_Key_Input(char key) {
   switch (input_state) {
+    // 如果在空闲状态按下时候:
   case INPUT_IDLE:
     if (key == 'A') {
       // 开始输入电压
@@ -165,34 +175,42 @@ static void Process_Key_Input(char key) {
       Clear_Input_Buffer();
       Display_Input_Prompt();
     } else if (key == 'C') {
-      // 取消/清除设定值
+      // 取消/清除设定值 Clear
       SetVoltage = 0.0f;
       SetCurrent = 0.0f;
-      OLED_ShowString(0, 54, (uint8_t *)"Clear OK       ", 8, 1);
+      OLED_ShowString(0, 54, (uint8_t *)"   --- Clear OK ---    ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
     }
     break;
 
+    // 如果在输入电压或电流状态按下时候:
   case INPUT_VOLTAGE:
   case INPUT_CURRENT:
     if (key == 'E') {
-      // 确认输入
+      // 确认输入 Enter
       if (input_index > 0) {
+        // 进行验证和设置
         if (Validate_And_Set_Value()) {
+          // 验证成功,返回空闲状态
           input_state = INPUT_IDLE;
+          // 清空输入缓冲区
           Clear_Input_Buffer();
         } else {
           // 验证失败,重新输入
+          // 清空输入缓冲区
           Clear_Input_Buffer();
+          // 显示输入提示
           Display_Input_Prompt();
         }
       }
     } else if (key == '*') {
       // 退格/取消
+      // 返回空闲状态
       input_state = INPUT_IDLE;
+      // 清空输入缓冲区
       Clear_Input_Buffer();
-      OLED_ShowString(0, 54, (uint8_t *)"Cancel         ", 8, 1);
+      OLED_ShowString(0, 54, (uint8_t *)"      --- Cancel ---       ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
     } else if ((key >= '0' && key <= '9') || key == '.') {
@@ -200,13 +218,16 @@ static void Process_Key_Input(char key) {
       if (input_index < 8) { // 限制输入长度
         // 检查小数点重复
         if (key == '.') {
+          // 只允许一个小数点,for循环遍历当前输入缓冲区
           for (uint8_t i = 0; i < input_index; i++) {
             if (input_buffer[i] == '.') {
               return; // 已有小数点,忽略
             }
           }
         }
+        // 添加到输入缓冲区
         input_buffer[input_index++] = key;
+        // (回到)显示输入提示
         Display_Input_Prompt();
       }
     }
@@ -313,22 +334,25 @@ int main(void) {
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
+    // 获取当前时间戳
     uint32_t current_time = HAL_GetTick();
 
     // 高频率扫描键盘
     KEY_Scan();
 
     if (Key_IsPressed()) {
+      //
       uint16_t key_val = Key_Read();
       char key = (char)key_val;
 
       // 处理按键输入
       Process_Key_Input(key);
-
+      // 清除按键状态
       Key_Clear();
     }
 
     // 定时更新 INA260 和 OLED 显示
+    // while是 20ms 循环一次，等待 1s 更新一次OLED显示
     if ((current_time - last_oled_update) >= OLED_UPDATE_INTERVAL) {
       last_oled_update = current_time;
 
@@ -371,7 +395,7 @@ int main(void) {
 
       // 只在非输入状态清除提示行
       if (input_state == INPUT_IDLE) {
-        OLED_ShowString(0, 54, (uint8_t *)"               ", 8, 1);
+        OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
       }
 
       OLED_Refresh();
