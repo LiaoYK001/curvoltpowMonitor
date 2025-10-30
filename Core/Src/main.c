@@ -20,6 +20,7 @@
 #include "main.h"
 #include "gpio.h"
 #include "i2c.h"
+#include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -69,15 +70,23 @@ uint8_t input_index = 0;               // 输入位置
 
 float SetVoltage = 0.00f; // 设定电压 (V)
 float SetCurrent = 0.00f; // 设定电流 (A)
+
+// 旋转编码器相关变量
+uint16_t encoder_last_cnt = 1000;
+const float ENCODER_STEP = 0.05f;
+const float MAX_VOLTAGE = 16.0f;
+const float MAX_CURRENT = 5.0f;
+uint8_t input_mode = 0; // 0=键盘模式, 1=编码器模式
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-/* USER CODE BEGIN PFP PFP指的是私有函数原型 */
-static void Process_Key_Input(char key);     // 处理按键输入
-static void Clear_Input_Buffer(void);        // 清空输入缓冲区
-static void Display_Input_Prompt(void);      // 显示输入提示
-static uint8_t Validate_And_Set_Value(void); // 验证并设置数值
+/* USER CODE BEGIN PFP */
+static void Process_Key_Input(char key);
+static void Clear_Input_Buffer(void);
+static void Display_Input_Prompt(void);
+static uint8_t Validate_And_Set_Value(void);
+static void Process_Encoder(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -95,6 +104,7 @@ static void Clear_Input_Buffer(void) {
   // 这是因为 -1 和 0 在二进制中每一位都相同，所以每个字节都会被正确地赋值。
   memset(input_buffer, 0, sizeof(input_buffer));
   input_index = 0;
+  input_mode = 0; // 模式为键盘输入模式或编码器输入模式 0=键盘模式, 1=编码器模式
 }
 
 /**
@@ -102,14 +112,75 @@ static void Clear_Input_Buffer(void) {
  */
 static void Display_Input_Prompt(void) {
   char prompt[32];
-  if (input_state == INPUT_VOLTAGE) {
-    sprintf(prompt, "SetV:%s#           ", input_buffer);
-    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
-  } else if (input_state == INPUT_CURRENT) {
-    sprintf(prompt, "SetI:%s#           ", input_buffer);
-    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+
+  if (input_mode == 1) {
+    // 使用编码器时,提示在第5行显示
+    if (input_state == INPUT_VOLTAGE) {
+      sprintf(prompt, "[ROTARY] V:%.2fV      ", SetVoltage);
+    } else if (input_state == INPUT_CURRENT) {
+      sprintf(prompt, "[ROTARY] I:%.2fA      ", SetCurrent);
+    }
+  } else {
+    // 使用键盘输入时,显示输入缓冲区
+    if (input_state == INPUT_VOLTAGE) {
+      sprintf(prompt, "SetV:%s#          ", input_buffer);
+    } else if (input_state == INPUT_CURRENT) {
+      sprintf(prompt, "SetI:%s#          ", input_buffer);
+    }
   }
+  OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
   OLED_Refresh();
+}
+
+/**
+ * @brief  处理旋转编码器输入
+ */
+static void Process_Encoder(void) {
+  // 获取当前编码器计数值
+  uint16_t encoder_cnt = __HAL_TIM_GET_COUNTER(&htim1);
+
+  // 计算计数差值
+  int16_t cnt_diff = (int16_t)(encoder_cnt - encoder_last_cnt);
+
+  // 如果计数值变化
+  if (cnt_diff != 0) {
+    // 切换到编码器模式,清空键盘缓冲区
+    if (input_mode == 0) {
+      input_mode = 1;
+      memset(input_buffer, 0, sizeof(input_buffer));
+      input_index = 0;
+    }
+
+    // 根据当前模式调节电压或电流
+    if (input_state == INPUT_VOLTAGE) {
+      // 调节电压模式
+      SetVoltage += cnt_diff * ENCODER_STEP;
+
+      // 限制范围 0.00 - 16.00 V
+      if (SetVoltage < 0.0f) {
+        SetVoltage = 0.0f;
+      } else if (SetVoltage > MAX_VOLTAGE) {
+        SetVoltage = MAX_VOLTAGE;
+      }
+
+    } else if (input_state == INPUT_CURRENT) {
+      // 调节电流模式
+      SetCurrent += cnt_diff * ENCODER_STEP;
+
+      // 限制范围 0.00 - 5.00 A
+      if (SetCurrent < 0.0f) {
+        SetCurrent = 0.0f;
+      } else if (SetCurrent > MAX_CURRENT) {
+        SetCurrent = MAX_CURRENT;
+      }
+    }
+
+    // 更新上次计数值
+    encoder_last_cnt = encoder_cnt;
+
+    // 显示提示信息
+    Display_Input_Prompt();
+  }
 }
 
 /**
@@ -124,7 +195,7 @@ static uint8_t Validate_And_Set_Value(void) {
 
   if (input_state == INPUT_VOLTAGE) {
     // 验证范围 0.00 - 16.00 V
-    if (value < 0.0f || value > 16.0f) {
+    if (value < 0.0f || value > MAX_VOLTAGE) {
       sprintf(msg, "  Vset ERR:0-16V     ");
       OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
       OLED_Refresh();
@@ -137,7 +208,7 @@ static uint8_t Validate_And_Set_Value(void) {
 
   } else if (input_state == INPUT_CURRENT) {
     // 验证范围 0.00 - 5.00 A
-    if (value < 0.0f || value > 5.0f) {
+    if (value < 0.0f || value > MAX_CURRENT) {
       sprintf(msg, "  Iset ERR:0-5A     ");
       OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
       OLED_Refresh();
@@ -178,7 +249,7 @@ static void Process_Key_Input(char key) {
       // 取消/清除设定值 Clear
       SetVoltage = 0.0f;
       SetCurrent = 0.0f;
-      OLED_ShowString(0, 54, (uint8_t *)"   --- Clear OK ---    ", 8, 1);
+      OLED_ShowString(0, 54, (uint8_t *)"    --- Clear OK ---    ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
     }
@@ -189,7 +260,22 @@ static void Process_Key_Input(char key) {
   case INPUT_CURRENT:
     if (key == 'E') {
       // 确认输入 Enter
-      if (input_index > 0) {
+      if (input_mode == 1) {
+        // 如果是用编码器调节的,直接确认
+        char msg[32];
+        if (input_state == INPUT_VOLTAGE) {
+          sprintf(msg, "  SetV:%.2fV OK     ", SetVoltage);
+        } else {
+          sprintf(msg, "  SetI:%.2fA OK     ", SetCurrent);
+        }
+        OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
+        OLED_Refresh();
+        HAL_Delay(1500);
+        // 返回空闲状态
+        input_state = INPUT_IDLE;
+        Clear_Input_Buffer();
+
+      } else if (input_index > 0) {
         // 进行验证和设置
         if (Validate_And_Set_Value()) {
           // 验证成功,返回空闲状态
@@ -213,8 +299,15 @@ static void Process_Key_Input(char key) {
       OLED_ShowString(0, 54, (uint8_t *)"      --- Cancel ---       ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
+
     } else if ((key >= '0' && key <= '9') || key == '.') {
-      // 数字或小数点
+      // 切换到键盘模式
+      if (input_mode == 1) {
+        input_mode = 0;
+        memset(input_buffer, 0, sizeof(input_buffer));
+        input_index = 0;
+      }
+      // 数字或小数点 - 只有在未使用编码器时才接受键盘输入
       if (input_index < 8) { // 限制输入长度
         // 检查小数点重复
         if (key == '.') {
@@ -268,6 +361,7 @@ int main(void) {
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   // u8 t = ' ';
@@ -277,7 +371,10 @@ int main(void) {
   OLED_ColorTurn(0);   // 0正常显示，1 反色显示
   OLED_DisplayTurn(1); // 0正常显示 1 屏幕翻转显示
   // OLED部分代码参考取自中景园电子ZJY096I0400WG11技术资料(SSD1315)
-  KEY_4x4_Init(); // 初始化4x4矩阵键盘
+  KEY_4x4_Init();                                 // 初始化4x4矩阵键盘
+  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL); // 启动编码器接口
+  htim1.Instance->CNT = 100;
+  encoder_last_cnt = 100;
 
   HAL_Delay(20);
   uint8_t codehyz[10] = "23211319";
@@ -344,13 +441,15 @@ int main(void) {
       //
       uint16_t key_val = Key_Read();
       char key = (char)key_val;
-
       // 处理按键输入
       Process_Key_Input(key);
       // 清除按键状态
       Key_Clear();
     }
-
+    // 处理旋转编码器 - 在电压/电流调节模式时生效
+    if (input_state == INPUT_VOLTAGE || input_state == INPUT_CURRENT) {
+      Process_Encoder();
+    }
     // 定时更新 INA260 和 OLED 显示
     // while是 20ms 循环一次，等待 1s 更新一次OLED显示
     if ((current_time - last_oled_update) >= OLED_UPDATE_INTERVAL) {
