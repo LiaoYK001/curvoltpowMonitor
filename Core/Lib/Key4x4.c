@@ -111,8 +111,8 @@ static uint8_t KEY_Scan_Row(uint8_t row) {
   // 检查所有列
   for (uint8_t col = 0; col < 4; col++) {
     if (HAL_GPIO_ReadPin(KEY_COL0_GPIO_Port, col_pins[col]) == GPIO_PIN_RESET) {
-      // 消抖延迟
-      delay_ms(10);
+      // 软件消抖延迟
+      delay_ms(20);
 
       // 再次确认
       if (HAL_GPIO_ReadPin(KEY_COL0_GPIO_Port, col_pins[col]) ==
