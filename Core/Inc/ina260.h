@@ -39,7 +39,7 @@ extern "C" {
  *         1    0   0x44
  *         1    1   0x45
  *************************/
-#define INA260_SLAVE_ADDRESS 0x40
+#define INA260_SLAVE_ADDRESS 0x40 // INA260 的Slave默认地址
 
 // hardware default settings: continuous voltage and current measurements, each
 // using 1 sample of a 1.1 ms ADC conversion
