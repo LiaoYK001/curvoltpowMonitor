@@ -75,6 +75,10 @@ void Error_Handler(void);
 #define KEY_COL3_GPIO_Port GPIOA
 #define a7led_Pin GPIO_PIN_0
 #define a7led_GPIO_Port GPIOB
+#define OLED_SCL_Pin GPIO_PIN_4
+#define OLED_SCL_GPIO_Port GPIOB
+#define OLED_SDA_Pin GPIO_PIN_5
+#define OLED_SDA_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
