@@ -22,7 +22,6 @@
 #include "i2c.h"
 #include "tim.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Key4x4.h"
