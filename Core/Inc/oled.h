@@ -39,7 +39,7 @@ typedef uint32_t u32;
 #ifdef oled_scl_Pin
 #define OLED_SCL_PIN oled_scl_Pin
 #else
-#define OLED_SCL_PIN GPIO_PIN_6 /* fallback: 修改为你的引脚 */
+#define OLED_SCL_PIN GPIO_PIN_8 /* fallback: 修改为你的引脚 */
 #endif
 #endif
 
@@ -55,7 +55,7 @@ typedef uint32_t u32;
 #ifdef oled_sda_Pin
 #define OLED_SDA_PIN oled_sda_Pin
 #else
-#define OLED_SDA_PIN GPIO_PIN_7
+#define OLED_SDA_PIN GPIO_PIN_9
 #endif
 #endif
 
