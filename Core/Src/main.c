@@ -22,10 +22,10 @@
 #include "i2c.h"
 #include "tim.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Key4x4.h"
+#include "dac60501.h"
 #include "delay.h"
 #include "ina260.h"
 #include "oled.h"
@@ -78,6 +78,11 @@ const float ENCODER_STEP = 0.01f;
 const float MAX_VOLTAGE = 16.0f;
 const float MAX_CURRENT = 1.0f;
 uint8_t input_mode = 0; // 0=键盘模式, 1=编码器模式
+
+// DAC相关常量
+const float DAC_VREF = 2.5f;     // DAC内部参考电压 2.5V
+const float DAC_VOUT_MAX = 2.5f; // DAC最大输出电压 2.5V
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -329,6 +334,27 @@ static void Process_Key_Input(char key) {
   }
 }
 
+/**
+ * @brief  根据SetVoltage计算并设置DAC输出
+ * @note   线性映射: SetVoltage(0~MAX_VOLTAGE) -> DAC_Vout(0~2.5V)
+ * @retval 0: 成功, <0: 失败
+ */
+static int Update_DAC_Output(void) {
+  // 线性映射计算
+  float dac_vout = (SetVoltage / MAX_VOLTAGE) * DAC_VOUT_MAX;
+
+  // 限幅保护
+  if (dac_vout < 0.0f)
+    dac_vout = 0.0f;
+  if (dac_vout > DAC_VOUT_MAX)
+    dac_vout = DAC_VOUT_MAX;
+
+  // 设置DAC输出
+  int ret = DAC60501_SetVoltage(dac_vout, DAC_VREF);
+
+  return ret;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -416,7 +442,233 @@ int main(void) {
     OLED_ShowString(0, 24, (uint8_t *)"INA260 ERR", 16, 1);
   }
   OLED_Refresh();
-  HAL_Delay(2000);
+  HAL_Delay(1500);
+
+  // ============ DAC60501 开机自检 ============
+  OLED_Clear();
+  OLED_CN(28, 6, 6, 12, 1, 1); // 显示标题
+  OLED_ShowString(0, 18, (uint8_t *)"DAC60501 Diagnostic", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(1000);
+
+  char dac_msg[32];
+  uint8_t diag_line = 30; // 诊断信息起始行
+
+  // ========== 步骤1: 初始化DAC ==========
+  OLED_ShowString(0, diag_line, (uint8_t *)"1.Init DAC...       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(300);
+
+  DAC60501_Init();
+  HAL_Delay(1000);
+
+  OLED_ShowString(0, diag_line, (uint8_t *)"1.Init DAC...OK       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(500);
+
+  // ========== 步骤2: 读取设备ID ==========
+  diag_line += 10;
+  OLED_ShowString(0, diag_line, (uint8_t *)"2.Read DevID...       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(300);
+
+  uint16_t dac_id = DAC60501_ReadDeviceId();
+
+  if (dac_id != 0xFFFF && dac_id != 0x0000) {
+    sprintf(dac_msg, "2.DevID:0x%04X OK       ", dac_id);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  } else {
+    sprintf(dac_msg, "2.DevID:0x%04X ERR       ", dac_id);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+    OLED_Refresh();
+    HAL_Delay(3000);
+    goto dac_diag_end; // ID读取失败,跳过后续测试
+  }
+  OLED_Refresh();
+  HAL_Delay(500);
+  // ========== 下一页 ==========
+  OLED_Clear();
+  diag_line = 0;
+  HAL_Delay(500);
+  // ========== 步骤3: 读取STATUS寄存器 ==========
+  diag_line += 10;
+  OLED_ShowString(0, diag_line, (uint8_t *)"3.Read STATUS...       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(300);
+
+  uint16_t status = DAC60501_ReadStatus();
+  sprintf(dac_msg, "3.STATUS:0x%04X       ", status);
+  OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  OLED_Refresh();
+  HAL_Delay(500);
+  // ========== 下一页 ==========
+  OLED_Clear();
+  diag_line = 0;
+  HAL_Delay(500);
+  // ========== 步骤4: 设置GAIN寄存器 ==========
+  diag_line += 10;
+  OLED_ShowString(0, diag_line, (uint8_t *)"4.Set GAIN...       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(300);
+
+  int gain_ret = DAC60501_SetGain(0, 0);
+
+  if (gain_ret == 0) {
+    // 验证GAIN写入
+    uint16_t gain_readback = I2C_ReadByte(GAIN);
+    sprintf(dac_msg, "4.GAIN:0x%04X OK       ", gain_readback);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  } else {
+    sprintf(dac_msg, "4.GAIN Set ERR:%d       ", gain_ret);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  }
+  OLED_Refresh();
+  HAL_Delay(500);
+
+  // ========== 步骤5: 检查REF-ALARM ==========
+  diag_line += 10;
+  OLED_ShowString(0, diag_line, (uint8_t *)"5.Check REF...       ", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(300);
+
+  int alarm = DAC60501_RefAlarm();
+  if (alarm == 0) {
+    OLED_ShowString(0, diag_line, (uint8_t *)"5.REF OK       ", 8, 1);
+  } else if (alarm == 1) {
+    OLED_ShowString(0, diag_line, (uint8_t *)"5.REF ALARM!       ", 8, 1);
+  } else {
+    sprintf(dac_msg, "5.REF Err:%d       ", alarm);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  }
+  OLED_Refresh();
+  HAL_Delay(500);
+  // ========== 下一页 ==========
+  OLED_Clear();
+  diag_line = 0;
+  HAL_Delay(500);
+  // ========== 步骤6: 测试电压输出(增强版) ==========
+  diag_line += 10;
+  OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output...", 8, 1);
+  OLED_Refresh();
+  HAL_Delay(500);
+
+  // 先读取CONFIG寄存器
+  uint16_t config_reg = I2C_ReadByte(CONFIG);
+  sprintf(dac_msg, "CONFIG:0x%04X", config_reg);
+  OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
+  OLED_Refresh();
+  HAL_Delay(1000);
+
+  // 清屏,开始详细测试
+  OLED_Clear();
+  diag_line = 18;
+
+  // 测试序列: 0V -> 1.25V -> 2.5V
+  float test_voltages[] = {0.0f, 1.25f, 2.5f};
+  uint8_t test_passed = 1;
+
+  for (int i = 0; i < 3; i++) {
+    // 显示当前测试电压
+    sprintf(dac_msg, "Test %d: %.2fV", i + 1, test_voltages[i]);
+    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+    OLED_Refresh();
+    HAL_Delay(300);
+
+    // 计算DAC码值
+    uint16_t dac_code = (uint16_t)((test_voltages[i] / DAC_VREF) * 4095.0f);
+    uint16_t dac_data = dac_code << 4; // 左对齐到16-bit
+
+    // 写入DAC_DATA寄存器
+    I2C_WriteByte(DAC_DATA, dac_data);
+    HAL_Delay(100); // 等待DAC稳定
+
+    // 回读DAC_DATA寄存器验证
+    uint16_t readback = I2C_ReadByte(DAC_DATA);
+    sprintf(dac_msg, "W:0x%04X R:0x%04X", dac_data, readback);
+    OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
+    OLED_Refresh();
+
+    // 验证写入是否成功
+    if (readback != dac_data) {
+      test_passed = 0;
+      sprintf(dac_msg, "Readback FAIL!");
+      OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
+      OLED_Refresh();
+      HAL_Delay(2000);
+      break;
+    }
+
+    // 再次检查STATUS寄存器
+    uint16_t status_now = DAC60501_ReadStatus();
+    sprintf(dac_msg, "STATUS:0x%04X", status_now);
+    OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
+    OLED_Refresh();
+
+    // 检查REF-ALARM位
+    if (status_now & STATUS_REF_ALARM) {
+      test_passed = 0;
+      OLED_ShowString(0, diag_line + 30, (uint8_t *)"REF ALARM!", 8, 1);
+      OLED_Refresh();
+      HAL_Delay(2000);
+      break;
+    }
+
+    // 显示"请用万用表测量"提示
+    OLED_ShowString(0, diag_line + 30, (uint8_t *)"Measure VOUT now!", 8, 1);
+    OLED_Refresh();
+    HAL_Delay(5000); // 保持5秒供测量
+
+    // 清除测试信息,准备下一个
+    if (i < 2) {
+      OLED_Clear();
+      diag_line = 18;
+    }
+  }
+
+  // 恢复0V输出
+  DAC60501_SetVoltage(0.0f, DAC_VREF);
+
+  // ========== 最终结果 ==========
+  OLED_Clear();
+  diag_line = 0;
+
+  if (test_passed) {
+    OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output OK", 8, 1);
+  } else {
+    OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output FAIL", 8, 1);
+  }
+  OLED_Refresh();
+  HAL_Delay(1000);
+
+  // ========== 额外诊断: 检查SYNC寄存器 ==========
+  diag_line += 10;
+  uint16_t sync_reg = I2C_ReadByte(SYNC);
+  sprintf(dac_msg, "SYNC:0x%04X", sync_reg);
+  OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  OLED_Refresh();
+  HAL_Delay(1000);
+
+  // ========== 额外诊断: 检查TRIGGER寄存器 ==========
+  diag_line += 10;
+  uint16_t trigger_reg = I2C_ReadByte(TRIGGER);
+  sprintf(dac_msg, "TRIGGER:0x%04X", trigger_reg);
+  OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  OLED_Refresh();
+  HAL_Delay(1000);
+
+  // ========== 诊断总结 ==========
+  diag_line += 10;
+  if (dac_id != 0xFFFF && dac_id != 0x0000 && gain_ret == 0 && alarm == 0 &&
+      test_passed) {
+    OLED_ShowString(0, diag_line, (uint8_t *)"=> All Tests PASS", 8, 1);
+  } else {
+    OLED_ShowString(0, diag_line, (uint8_t *)"=> Tests FAILED!", 8, 1);
+  }
+
+dac_diag_end:
+  OLED_Refresh();
+  HAL_Delay(5000); // 显示诊断结果5秒
+  // ============ DAC诊断结束 ============
 
   // LED7显示
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_SET);
@@ -426,6 +678,7 @@ int main(void) {
   DWT_Delay_Init();        // 微秒档位初始化 delay.c
 
   OLED_Clear();
+
   OLED_CN(28, 6, 6, 12, 1, 1);
   /* USER CODE END 2 */
 
@@ -497,6 +750,16 @@ int main(void) {
       if (input_state == INPUT_IDLE) {
         OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
       }
+
+      // ========== 更新DAC输出 ==========
+      // int dac_ret = Update_DAC_Output();
+      // if (dac_ret != 0) {
+      //   // DAC设置失败时的错误处理(可选)
+      //   // 例如: 在OLED底部显示警告信息
+      //   OLED_Clear();
+      //   HAL_Delay(2000);
+      // }
+      // ======================================
 
       OLED_Refresh();
       HAL_GPIO_TogglePin(a7led_GPIO_Port, a7led_Pin);
