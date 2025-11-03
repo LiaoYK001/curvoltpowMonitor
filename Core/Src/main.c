@@ -22,7 +22,6 @@
 #include "i2c.h"
 #include "tim.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Key4x4.h"
@@ -146,11 +145,29 @@ static void Process_Encoder(void) {
   // 获取当前编码器计数值
   uint16_t encoder_cnt = __HAL_TIM_GET_COUNTER(&htim1);
 
-  // 计算计数差值 2格子为一个步进单位
-  int16_t cnt_diff = (int16_t)((encoder_cnt - encoder_last_cnt) / 2);
+  // 计算计数差值 - 使用有符号整数避免溢出问题
+  // 方法1: 先转换为有符号数再相减
+  int16_t cnt_diff = ((int16_t)encoder_cnt - (int16_t)encoder_last_cnt) / 2;
+
+  // 方法2(更稳健): 处理溢出情况
+  // int16_t raw_diff = (int16_t)encoder_cnt - (int16_t)encoder_last_cnt;
+  // // 检测大幅跳变(可能是溢出)
+  // if (raw_diff > 32767 || raw_diff < -32767) {
+  //   // 忽略溢出的数据
+  //   encoder_last_cnt = encoder_cnt;
+  //   return;
+  // }
+  // int16_t cnt_diff = raw_diff / 2;
 
   // 如果计数值变化
   if (cnt_diff != 0) {
+    // 限制单次调整幅度,防止异常跳变
+    if (abs(cnt_diff) > 100) {
+      // 单次变化过大,可能是溢出或干扰,忽略
+      encoder_last_cnt = encoder_cnt;
+      return;
+    }
+
     // 切换到编码器模式,清空键盘缓冲区
     if (input_mode == 0) {
       input_mode = 1;
@@ -161,24 +178,28 @@ static void Process_Encoder(void) {
     // 根据当前模式调节电压或电流
     if (input_state == INPUT_VOLTAGE) {
       // 调节电压模式
-      SetVoltage += cnt_diff * (ENCODER_STEP * 5.0f);
+      float new_voltage = SetVoltage + cnt_diff * (ENCODER_STEP * 5.0f);
 
       // 限制范围 0.00 - 16.00 V
-      if (SetVoltage < 0.0f) {
+      if (new_voltage < 0.0f) {
         SetVoltage = 0.0f;
-      } else if (SetVoltage > MAX_VOLTAGE) {
+      } else if (new_voltage > MAX_VOLTAGE) {
         SetVoltage = MAX_VOLTAGE;
+      } else {
+        SetVoltage = new_voltage;
       }
 
     } else if (input_state == INPUT_CURRENT) {
       // 调节电流模式
-      SetCurrent += cnt_diff * ENCODER_STEP;
+      float new_current = SetCurrent + cnt_diff * ENCODER_STEP;
 
       // 限制范围 0.00 - 5.00 A
-      if (SetCurrent < 0.0f) {
+      if (new_current < 0.0f) {
         SetCurrent = 0.0f;
-      } else if (SetCurrent > MAX_CURRENT) {
+      } else if (new_current > MAX_CURRENT) {
         SetCurrent = MAX_CURRENT;
+      } else {
+        SetCurrent = new_current;
       }
     }
 
