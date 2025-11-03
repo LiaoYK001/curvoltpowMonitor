@@ -60,10 +60,11 @@ void DAC60501_Init(void) {
   I2C_WriteByte(CONFIG, 0x0000);
   HAL_Delay(2); /* 给内部参考一些上电稳定时间 */
 
-  /* 2) 将 GAIN 设为安全值：REF-DIV=0, BUFF-GAIN=0
-   * 使用 write 覆盖（也可以先读再修改，下面的 SetGain 提供了读写保护的做法）
+  /* 2)
+   * https://e2echina.ti.com/support/machine-translation/mt-data-converters/f/mt-data-converters-forum/367292/dac60501
+   * 修正问题 使用 write 覆盖
    */
-  I2C_WriteByte(GAIN, 0x0000);
+  I2C_WriteByte(GAIN, 0x0101);
   HAL_Delay(2);
 
   /* 3) 软复位（可选）: TRIGGER 写 0x000A 做 soft reset（datasheet 指示）
@@ -73,6 +74,10 @@ void DAC60501_Init(void) {
   // HAL_Delay(2);
 
   I2C_WriteByte(SYNC, 0x0000);
+  HAL_Delay(2);
+
+  /* 3) 输出进行归零 */
+  I2C_WriteByte(DAC_DATA, 0x0000);
   HAL_Delay(2);
 }
 

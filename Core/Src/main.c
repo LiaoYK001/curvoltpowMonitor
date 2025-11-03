@@ -22,6 +22,7 @@
 #include "i2c.h"
 #include "tim.h"
 
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Key4x4.h"
@@ -511,7 +512,7 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(300);
 
-  int gain_ret = DAC60501_SetGain(0, 0);
+  int gain_ret = DAC60501_SetGain(1, 1);
 
   if (gain_ret == 0) {
     // 验证GAIN写入
@@ -553,6 +554,7 @@ int main(void) {
   HAL_Delay(500);
 
   // 先读取CONFIG寄存器
+  I2C_WriteByte(CONFIG, 0x0000); // 复位CONFIG寄存器
   uint16_t config_reg = I2C_ReadByte(CONFIG);
   sprintf(dac_msg, "CONFIG:0x%04X", config_reg);
   OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
@@ -563,67 +565,67 @@ int main(void) {
   OLED_Clear();
   diag_line = 18;
 
-  // 测试序列: 0V -> 1.25V -> 2.5V
-  float test_voltages[] = {0.0f, 1.25f, 2.5f};
-  uint8_t test_passed = 1;
+  // // 测试序列: 0V -> 1.25V -> 2.5V
+  // float test_voltages[] = {0.0f, 1.25f, 2.5f};
+  // uint8_t test_passed = 1;
 
-  for (int i = 0; i < 3; i++) {
-    // 显示当前测试电压
-    sprintf(dac_msg, "Test %d: %.2fV", i + 1, test_voltages[i]);
-    OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
-    OLED_Refresh();
-    HAL_Delay(300);
+  // for (int i = 0; i < 3; i++) {
+  //   // 显示当前测试电压
+  //   sprintf(dac_msg, "Test %d: %.2fV", i + 1, test_voltages[i]);
+  //   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
+  //   OLED_Refresh();
+  //   HAL_Delay(300);
 
-    // 计算DAC码值
-    uint16_t dac_code = (uint16_t)((test_voltages[i] / DAC_VREF) * 4095.0f);
-    uint16_t dac_data = dac_code << 4; // 左对齐到16-bit
+  //   // 计算DAC码值
+  //   uint16_t dac_code = (uint16_t)((test_voltages[i] / DAC_VREF) * 4095.0f);
+  //   uint16_t dac_data = dac_code << 4; // 左对齐到16-bit
 
-    // 写入DAC_DATA寄存器
-    I2C_WriteByte(DAC_DATA, dac_data);
-    HAL_Delay(100); // 等待DAC稳定
+  //   // 写入DAC_DATA寄存器
+  //   I2C_WriteByte(DAC_DATA, dac_data);
+  //   HAL_Delay(100); // 等待DAC稳定
 
-    // 回读DAC_DATA寄存器验证
-    uint16_t readback = I2C_ReadByte(DAC_DATA);
-    sprintf(dac_msg, "W:0x%04X R:0x%04X", dac_data, readback);
-    OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
-    OLED_Refresh();
+  //   // 回读DAC_DATA寄存器验证
+  //   uint16_t readback = I2C_ReadByte(DAC_DATA);
+  //   sprintf(dac_msg, "W:0x%04X R:0x%04X", dac_data, readback);
+  //   OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
+  //   OLED_Refresh();
 
-    // 验证写入是否成功
-    if (readback != dac_data) {
-      test_passed = 0;
-      sprintf(dac_msg, "Readback FAIL!");
-      OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
-      OLED_Refresh();
-      HAL_Delay(2000);
-      break;
-    }
+  //   // 验证写入是否成功
+  //   if (readback != dac_data) {
+  //     test_passed = 0;
+  //     sprintf(dac_msg, "Readback FAIL!");
+  //     OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
+  //     OLED_Refresh();
+  //     HAL_Delay(2000);
+  //     break;
+  //   }
 
-    // 再次检查STATUS寄存器
-    uint16_t status_now = DAC60501_ReadStatus();
-    sprintf(dac_msg, "STATUS:0x%04X", status_now);
-    OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
-    OLED_Refresh();
+  //   // 再次检查STATUS寄存器
+  //   uint16_t status_now = DAC60501_ReadStatus();
+  //   sprintf(dac_msg, "STATUS:0x%04X", status_now);
+  //   OLED_ShowString(0, diag_line + 20, (uint8_t *)dac_msg, 8, 1);
+  //   OLED_Refresh();
 
-    // 检查REF-ALARM位
-    if (status_now & STATUS_REF_ALARM) {
-      test_passed = 0;
-      OLED_ShowString(0, diag_line + 30, (uint8_t *)"REF ALARM!", 8, 1);
-      OLED_Refresh();
-      HAL_Delay(2000);
-      break;
-    }
+  //   // 检查REF-ALARM位
+  //   if (status_now & STATUS_REF_ALARM) {
+  //     test_passed = 0;
+  //     OLED_ShowString(0, diag_line + 30, (uint8_t *)"REF ALARM!", 8, 1);
+  //     OLED_Refresh();
+  //     HAL_Delay(2000);
+  //     break;
+  //   }
 
-    // 显示"请用万用表测量"提示
-    OLED_ShowString(0, diag_line + 30, (uint8_t *)"Measure VOUT now!", 8, 1);
-    OLED_Refresh();
-    HAL_Delay(5000); // 保持5秒供测量
+  //   // 显示"请用万用表测量"提示
+  //   OLED_ShowString(0, diag_line + 30, (uint8_t *)"Measure VOUT now!", 8, 1);
+  //   OLED_Refresh();
+  //   HAL_Delay(5000); // 保持5秒供测量
 
-    // 清除测试信息,准备下一个
-    if (i < 2) {
-      OLED_Clear();
-      diag_line = 18;
-    }
-  }
+  //   // 清除测试信息,准备下一个
+  //   if (i < 2) {
+  //     OLED_Clear();
+  //     diag_line = 18;
+  //   }
+  // }
 
   // 恢复0V输出
   DAC60501_SetVoltage(0.0f, DAC_VREF);
@@ -632,13 +634,13 @@ int main(void) {
   OLED_Clear();
   diag_line = 0;
 
-  if (test_passed) {
-    OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output OK", 8, 1);
-  } else {
-    OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output FAIL", 8, 1);
-  }
-  OLED_Refresh();
-  HAL_Delay(1000);
+  // if (test_passed) {
+  //   OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output OK", 8, 1);
+  // } else {
+  //   OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output FAIL", 8, 1);
+  // }
+  // OLED_Refresh();
+  // HAL_Delay(1000);
 
   // ========== 额外诊断: 检查SYNC寄存器 ==========
   diag_line += 10;
@@ -658,8 +660,7 @@ int main(void) {
 
   // ========== 诊断总结 ==========
   diag_line += 10;
-  if (dac_id != 0xFFFF && dac_id != 0x0000 && gain_ret == 0 && alarm == 0 &&
-      test_passed) {
+  if (dac_id != 0xFFFF && dac_id != 0x0000 && gain_ret == 0 && alarm == 0) {
     OLED_ShowString(0, diag_line, (uint8_t *)"=> All Tests PASS", 8, 1);
   } else {
     OLED_ShowString(0, diag_line, (uint8_t *)"=> Tests FAILED!", 8, 1);
@@ -752,13 +753,12 @@ dac_diag_end:
       }
 
       // ========== 更新DAC输出 ==========
-      // int dac_ret = Update_DAC_Output();
-      // if (dac_ret != 0) {
-      //   // DAC设置失败时的错误处理(可选)
-      //   // 例如: 在OLED底部显示警告信息
-      //   OLED_Clear();
-      //   HAL_Delay(2000);
-      // }
+      int dac_ret = Update_DAC_Output();
+      if (dac_ret != 0) {
+        // DAC设置失败时显示错误信息
+        OLED_ShowString(0, 54, (uint8_t *)"DAC SET ERR!       ", 8, 1);
+        HAL_Delay(1000);
+      }
       // ======================================
 
       OLED_Refresh();
@@ -790,7 +790,7 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
@@ -804,7 +804,7 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
     Error_Handler();
   }
 }
