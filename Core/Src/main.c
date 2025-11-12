@@ -73,11 +73,14 @@ float SetVoltage = 0.00f; // 设定电压 (V)
 float SetCurrent = 0.00f; // 设定电流 (A)
 
 // 旋转编码器相关变量
-uint16_t encoder_last_cnt = 1000;
-const float ENCODER_STEP = 0.01f;
-// const float MAX_VOLTAGE = 16.0f;
-// const float MAX_CURRENT = 1.0f;
-uint8_t input_mode = 0; // 0=键盘模式, 1=编码器模式
+uint16_t V_encoder_last_cnt = 1000;    // 上次电压编码器计数值
+uint16_t I_encoder_last_cnt = 1000;    // 上次电流编码器计数值
+const float ENCODER_STEP = 0.01f;      // 编码器单步调节量
+uint8_t encoder_v_active = 0;          // 电压编码器激活标志
+uint8_t encoder_i_active = 0;          // 电流编码器激活标志
+uint32_t encoder_v_last_time = 0;      // 电压编码器上次活动时间
+uint32_t encoder_i_last_time = 0;      // 电流编码器上次活动时间
+const uint32_t ENCODER_TIMEOUT = 2000; // 编码器提示超时时间(ms)
 
 // DAC相关常量
 // const float DAC_VREF = 2.5f;     // DAC内部参考电压 2.5V
@@ -111,7 +114,6 @@ static void Clear_Input_Buffer(void) {
   // 这是因为 -1 和 0 在二进制中每一位都相同，所以每个字节都会被正确地赋值。
   memset(input_buffer, 0, sizeof(input_buffer));
   input_index = 0;
-  input_mode = 0; // 模式为键盘输入模式或编码器输入模式 0=键盘模式, 1=编码器模式
 }
 
 /**
@@ -119,96 +121,104 @@ static void Clear_Input_Buffer(void) {
  */
 static void Display_Input_Prompt(void) {
   char prompt[32];
+  uint32_t current_time = HAL_GetTick();
 
-  if (input_mode == 1) {
-    // 使用编码器时,提示在第5行显示
-    if (input_state == INPUT_VOLTAGE) {
-      sprintf(prompt, "[ROTARY] V:%.2fV      ", SetVoltage);
-    } else if (input_state == INPUT_CURRENT) {
-      sprintf(prompt, "[ROTARY] I:%.2fA      ", SetCurrent);
+  // 优先显示键盘输入状态
+  if (input_state == INPUT_VOLTAGE) {
+    sprintf(prompt, "SetV:%s#          ", input_buffer);
+    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+  } else if (input_state == INPUT_CURRENT) {
+    sprintf(prompt, "SetI:%s#          ", input_buffer);
+    OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+  }
+  // 显示编码器调节状态（如果有激活）
+  else {
+    // 检查电压编码器是否在超时时间内活动
+    if (encoder_v_active &&
+        (current_time - encoder_v_last_time) < ENCODER_TIMEOUT) {
+      sprintf(prompt, "[SET] V:%.2fV      ", SetVoltage);
+      OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
     }
-  } else {
-    // 使用键盘输入时,显示输入缓冲区
-    if (input_state == INPUT_VOLTAGE) {
-      sprintf(prompt, "SetV:%s#          ", input_buffer);
-    } else if (input_state == INPUT_CURRENT) {
-      sprintf(prompt, "SetI:%s#          ", input_buffer);
+    // 检查电流编码器是否在超时时间内活动
+    else if (encoder_i_active &&
+             (current_time - encoder_i_last_time) < ENCODER_TIMEOUT) {
+      sprintf(prompt, "[SET] I:%.2fA      ", SetCurrent);
+      OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+    }
+    // 超时后清除提示
+    else {
+      encoder_v_active = 0;
+      encoder_i_active = 0;
+      // 不在输入状态时清空提示行
+      if (input_state == INPUT_IDLE) {
+        OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
+      }
     }
   }
-  OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
+
   OLED_Refresh();
 }
 
 /**
- * @brief  处理旋转编码器输入
+ * @brief  处理旋转编码器输入（随时可调）
  */
 static void Process_Encoder(void) {
-  // 获取当前编码器计数值
-  uint16_t encoder_cnt = __HAL_TIM_GET_COUNTER(&htim1);
+  uint32_t current_time = HAL_GetTick();
 
-  // 计算计数差值 - 使用有符号整数避免溢出问题
-  // 方法1: 先转换为有符号数再相减
-  int16_t cnt_diff = ((int16_t)encoder_cnt - (int16_t)encoder_last_cnt) / 2;
+  // ========== 处理电压编码器 (TIM1) ==========
+  uint16_t V_encoder_cnt = __HAL_TIM_GET_COUNTER(&htim1);
+  int16_t V_cnt_diff =
+      ((int16_t)V_encoder_cnt - (int16_t)V_encoder_last_cnt) / 2;
 
-  // 方法2(更稳健): 处理溢出情况
-  // int16_t raw_diff = (int16_t)encoder_cnt - (int16_t)encoder_last_cnt;
-  // // 检测大幅跳变(可能是溢出)
-  // if (raw_diff > 32767 || raw_diff < -32767) {
-  //   // 忽略溢出的数据
-  //   encoder_last_cnt = encoder_cnt;
-  //   return;
-  // }
-  // int16_t cnt_diff = raw_diff / 2;
+  // 限制单次调整幅度,防止异常跳变
+  if (abs(V_cnt_diff) > 0 && abs(V_cnt_diff) <= 100) {
+    // 计算新电压值
+    float new_voltage = SetVoltage + V_cnt_diff * (ENCODER_STEP * 5.0f);
 
-  // 如果计数值变化
-  if (cnt_diff != 0) {
-    // 限制单次调整幅度,防止异常跳变
-    if (abs(cnt_diff) > 100) {
-      // 单次变化过大,可能是溢出或干扰,忽略
-      encoder_last_cnt = encoder_cnt;
-      return;
+    // 限制范围 0.00 - MAX_VOLTAGE
+    if (new_voltage < 0.0f) {
+      SetVoltage = 0.0f;
+    } else if (new_voltage > MAX_VOLTAGE) {
+      SetVoltage = MAX_VOLTAGE;
+    } else {
+      SetVoltage = new_voltage;
     }
 
-    // 切换到编码器模式,清空键盘缓冲区
-    if (input_mode == 0) {
-      input_mode = 1;
-      memset(input_buffer, 0, sizeof(input_buffer));
-      input_index = 0;
-    }
-
-    // 根据当前模式调节电压或电流
-    if (input_state == INPUT_VOLTAGE) {
-      // 调节电压模式
-      float new_voltage = SetVoltage + cnt_diff * (ENCODER_STEP * 5.0f);
-
-      // 限制范围 0.00 - 16.00 V
-      if (new_voltage < 0.0f) {
-        SetVoltage = 0.0f;
-      } else if (new_voltage > MAX_VOLTAGE) {
-        SetVoltage = MAX_VOLTAGE;
-      } else {
-        SetVoltage = new_voltage;
-      }
-
-    } else if (input_state == INPUT_CURRENT) {
-      // 调节电流模式
-      float new_current = SetCurrent + cnt_diff * ENCODER_STEP;
-
-      // 限制范围 0.00 - 5.00 A
-      if (new_current < 0.0f) {
-        SetCurrent = 0.0f;
-      } else if (new_current > MAX_CURRENT) {
-        SetCurrent = MAX_CURRENT;
-      } else {
-        SetCurrent = new_current;
-      }
-    }
+    // 标记电压编码器活动
+    encoder_v_active = 1;
+    encoder_v_last_time = current_time;
+    encoder_i_active = 0; // 清除电流编码器提示
 
     // 更新上次计数值
-    encoder_last_cnt = encoder_cnt;
+    V_encoder_last_cnt = V_encoder_cnt;
+  }
 
-    // 显示提示信息
-    Display_Input_Prompt();
+  // ========== 处理电流编码器 (TIM4) ==========
+  uint16_t I_encoder_cnt = __HAL_TIM_GET_COUNTER(&htim4);
+  int16_t I_cnt_diff =
+      ((int16_t)I_encoder_cnt - (int16_t)I_encoder_last_cnt) / 2;
+
+  // 限制单次调整幅度,防止异常跳变
+  if (abs(I_cnt_diff) > 0 && abs(I_cnt_diff) <= 100) {
+    // 计算新电流值
+    float new_current = SetCurrent + I_cnt_diff * ENCODER_STEP;
+
+    // 限制范围 0.00 - MAX_CURRENT
+    if (new_current < 0.0f) {
+      SetCurrent = 0.0f;
+    } else if (new_current > MAX_CURRENT) {
+      SetCurrent = MAX_CURRENT;
+    } else {
+      SetCurrent = new_current;
+    }
+
+    // 标记电流编码器活动
+    encoder_i_active = 1;
+    encoder_i_last_time = current_time;
+    encoder_v_active = 0; // 清除电压编码器提示
+
+    // 更新上次计数值
+    I_encoder_last_cnt = I_encoder_cnt;
   }
 }
 
@@ -268,11 +278,15 @@ static void Process_Key_Input(char key) {
       // 开始输入电压
       input_state = INPUT_VOLTAGE;
       Clear_Input_Buffer();
+      encoder_v_active = 0; // 清除编码器状态
+      encoder_i_active = 0;
       Display_Input_Prompt();
     } else if (key == 'B') {
       // 开始输入电流
       input_state = INPUT_CURRENT;
       Clear_Input_Buffer();
+      encoder_v_active = 0; // 清除编码器状态
+      encoder_i_active = 0;
       Display_Input_Prompt();
     } else if (key == 'C') {
       // 取消/清除设定值 Clear
@@ -288,24 +302,7 @@ static void Process_Key_Input(char key) {
   case INPUT_VOLTAGE:
   case INPUT_CURRENT:
     if (key == 'E') {
-      // 确认输入 Enter
-      if (input_mode == 1) {
-        // 如果是用编码器调节的,直接确认
-        char msg[32];
-        if (input_state == INPUT_VOLTAGE) {
-          sprintf(msg, "  SetV:%.2fV OK     ", SetVoltage);
-        } else {
-          sprintf(msg, "  SetI:%.2fA OK     ", SetCurrent);
-        }
-        OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
-        OLED_Refresh();
-        HAL_Delay(1500);
-        // 返回空闲状态
-        input_state = INPUT_IDLE;
-        Clear_Input_Buffer();
-
-      } else if (input_index > 0) {
-        // 进行验证和设置
+      if (input_index > 0) {
         if (Validate_And_Set_Value()) {
           // 验证成功,返回空闲状态
           input_state = INPUT_IDLE;
@@ -330,15 +327,7 @@ static void Process_Key_Input(char key) {
       HAL_Delay(1000);
 
     } else if ((key >= '0' && key <= '9') || key == '.') {
-      // 切换到键盘模式
-      if (input_mode == 1) {
-        input_mode = 0;
-        memset(input_buffer, 0, sizeof(input_buffer));
-        input_index = 0;
-      }
-      // 数字或小数点 - 只有在未使用编码器时才接受键盘输入
-      if (input_index < 8) { // 限制输入长度
-        // 检查小数点重复
+      if (input_index < 8) {
         if (key == '.') {
           // 只允许一个小数点,for循环遍历当前输入缓冲区
           for (uint8_t i = 0; i < input_index; i++) {
@@ -419,9 +408,13 @@ int main(void) {
   OLED_DisplayTurn(1); // 0正常显示 1 屏幕翻转显示
   // OLED部分代码参考取自中景园电子ZJY096I0400WG11技术资料(SSD1315)
   KEY_4x4_Init();                                 // 初始化4x4矩阵键盘
-  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL); // 启动编码器接口
-  htim1.Instance->CNT = 100;
-  encoder_last_cnt = 100;
+  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL); // 启动电压编码器
+  htim1.Instance->CNT = 1000;
+  V_encoder_last_cnt = 1000;
+
+  HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); // 启动电流编码器
+  htim4.Instance->CNT = 1000;
+  I_encoder_last_cnt = 1000;
 
   HAL_Delay(20);
   uint8_t codehyz[10] = "23211319";
@@ -590,7 +583,7 @@ int main(void) {
   I2C_WriteByte_Addr(DAC_CURRENT_ADDR, CONFIG, 0x0000); // 复位I CONFIG寄存器
   uint16_t V_config_reg = I2C_ReadByte_Addr(DAC_VOLTAGE_ADDR, CONFIG);
   uint16_t I_config_reg = I2C_ReadByte_Addr(DAC_CURRENT_ADDR, CONFIG);
-  sprintf(dac_msg, "CFG:V-0x%04X,I-0x%04X", V_config_reg, I_config_reg);
+  sprintf(dac_msg, "CFG:V-%04X,I-%04X", V_config_reg, I_config_reg);
   OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
@@ -673,7 +666,7 @@ int main(void) {
   diag_line += 10;
   uint16_t sync_reg_v = I2C_ReadByte_Addr(DAC_VOLTAGE_ADDR, SYNC);
   uint16_t sync_reg_i = I2C_ReadByte_Addr(DAC_CURRENT_ADDR, SYNC);
-  sprintf(dac_msg, "SYN-V:0x%04X-I:0x%04X", sync_reg_v, sync_reg_i);
+  sprintf(dac_msg, "SYN-V:%04X-I:%04X", sync_reg_v, sync_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
@@ -682,7 +675,7 @@ int main(void) {
   diag_line += 10;
   uint16_t trigger_reg_v = I2C_ReadByte_Addr(DAC_VOLTAGE_ADDR, TRIGGER);
   uint16_t trigger_reg_i = I2C_ReadByte_Addr(DAC_CURRENT_ADDR, TRIGGER);
-  sprintf(dac_msg, "TRIG-V:0x%04X-I:0x%04X", trigger_reg_v, trigger_reg_i);
+  sprintf(dac_msg, "TRIG-V:%04X-I:%04X", trigger_reg_v, trigger_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
@@ -722,7 +715,6 @@ int main(void) {
     KEY_Scan();
 
     if (Key_IsPressed()) {
-      //
       uint16_t key_val = Key_Read();
       char key = (char)key_val;
       // 处理按键输入
@@ -730,10 +722,19 @@ int main(void) {
       // 清除按键状态
       Key_Clear();
     }
-    // 处理旋转编码器 - 在电压/电流调节模式时生效
-    if (input_state == INPUT_VOLTAGE || input_state == INPUT_CURRENT) {
-      Process_Encoder();
+
+    // ========== 随时处理旋转编码器（无论任何状态）==========
+    Process_Encoder();
+
+    // 更新编码器提示显示（每50ms更新一次）
+    static uint32_t last_encoder_display = 0;
+    if ((current_time - last_encoder_display) >= 50) {
+      last_encoder_display = current_time;
+      if (encoder_v_active || encoder_i_active) {
+        Display_Input_Prompt();
+      }
     }
+
     // 定时更新 INA260 和 OLED 显示
     // while是 20ms 循环一次，等待 1s 更新一次OLED显示
     if ((current_time - last_oled_update) >= OLED_UPDATE_INTERVAL) {
@@ -776,12 +777,12 @@ int main(void) {
       }
       OLED_ShowString(0, 45, (uint8_t *)buffer, 8, 1);
 
-      // 只在非输入状态清除提示行
-      if (input_state == INPUT_IDLE) {
+      // 只在非输入状态且编码器未激活时清除提示行
+      if (input_state == INPUT_IDLE && !encoder_v_active && !encoder_i_active) {
         OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
       }
 
-      // ========== 更新DAC输出 ==========
+      // 更新DAC输出
       int dac_ret = Update_DAC_Outputs();
       if (dac_ret == -1) {
         OLED_ShowString(0, 54, (uint8_t *)"V-DAC ERR!       ", 8, 1);
@@ -799,12 +800,12 @@ int main(void) {
     }
 
     HAL_Delay(20);
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
   }
-  /* USER CODE END 3 */
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 3 */
 }
+/* USER CODE END 3 */
 
 /**
  * @brief System Clock Configuration
