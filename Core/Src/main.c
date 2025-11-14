@@ -248,7 +248,7 @@ static uint8_t Validate_And_Set_Value(void) {
   } else if (input_state == INPUT_CURRENT) {
     // 验证范围 0.00 - 5.00 A
     if (value < 0.0f || value > MAX_CURRENT) {
-      sprintf(msg, "  Iset ERR:0-5A     ");
+      sprintf(msg, "  Iset ERR:0-1A     ");
       OLED_ShowString(0, 54, (uint8_t *)msg, 8, 1);
       OLED_Refresh();
       HAL_Delay(2000);
@@ -292,7 +292,7 @@ static void Process_Key_Input(char key) {
       // 取消/清除设定值 Clear
       SetVoltage = 0.0f;
       SetCurrent = 0.0f;
-      OLED_ShowString(0, 54, (uint8_t *)"    --- Clear OK ---    ", 8, 1);
+      OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
     }
@@ -322,7 +322,8 @@ static void Process_Key_Input(char key) {
       input_state = INPUT_IDLE;
       // 清空输入缓冲区
       Clear_Input_Buffer();
-      OLED_ShowString(0, 54, (uint8_t *)"      --- Cancel ---       ", 8, 1);
+      // 取消提示
+      OLED_ShowString(0, 54, (uint8_t *)"  --- Cancel ---       ", 8, 1);
       OLED_Refresh();
       HAL_Delay(1000);
 
@@ -460,7 +461,7 @@ int main(void) {
   // ============ DAC60501 开机自检 ============
   OLED_Clear();
   OLED_CN(28, 6, 6, 12, 1, 1); // 显示标题
-  OLED_ShowString(0, 18, (uint8_t *)"DAC60501 Diagnostic", 8, 1);
+  OLED_ShowString(0, 20, (uint8_t *)"DAC60501 Diagnostic", 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
 
@@ -765,17 +766,17 @@ int main(void) {
         } else {
           sprintf(buffer, "SI:%.2fA I:%.0fmA   ", SetCurrent, current_ma);
         }
-        OLED_ShowString(0, 18 + 14, (uint8_t *)buffer, 12, 1);
+        OLED_ShowString(0, 18 + 10, (uint8_t *)buffer, 12, 1);
       }
 
       // 计算并显示功率
       power_mw = (voltage_mv * current_ma) / 1000.0f;
       if (power_mw > 1000) {
-        sprintf(buffer, " P:%.3fW    ", power_mw / 1000.0f);
+        sprintf(buffer, "P:%.3fW              ", power_mw / 1000.0f);
       } else {
-        sprintf(buffer, " P:%.3fmW    ", power_mw);
+        sprintf(buffer, "P:%.3fmW              ", power_mw);
       }
-      OLED_ShowString(0, 45, (uint8_t *)buffer, 8, 1);
+      OLED_ShowString(0, 18 + 10 * 2, (uint8_t *)buffer, 12, 1);
 
       // 只在非输入状态且编码器未激活时清除提示行
       if (input_state == INPUT_IDLE && !encoder_v_active && !encoder_i_active) {
