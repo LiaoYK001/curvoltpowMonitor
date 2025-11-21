@@ -54,7 +54,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, KEY_ROW0_Pin|KEY_ROW1_Pin|KEY_ROW2_Pin|KEY_ROW3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, a7led_Pin|OLED_SCL_Pin|OLED_SDA_Pin|EnableSwitch_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, a7led_Pin|OLED_SCL_Pin|OLED_SDA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : Coarse_Detector_V_Pin Coarse_Detector_I_Pin */
   GPIO_InitStruct.Pin = Coarse_Detector_V_Pin|Coarse_Detector_I_Pin;
@@ -75,12 +75,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : a7led_Pin EnableSwitch_Pin */
-  GPIO_InitStruct.Pin = a7led_Pin|EnableSwitch_Pin;
+  /*Configure GPIO pin : a7led_Pin */
+  GPIO_InitStruct.Pin = a7led_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(a7led_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : OLED_SCL_Pin OLED_SDA_Pin */
   GPIO_InitStruct.Pin = OLED_SCL_Pin|OLED_SDA_Pin;
