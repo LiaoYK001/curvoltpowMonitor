@@ -58,6 +58,10 @@
 uint32_t last_oled_update = 0;              // 上次 OLED 更新时间计数
 const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms = 1s
 
+// 无锁开关相关变量
+volatile uint32_t last_switch_trigger_time = 0; // 上次触发时间
+const uint32_t SWITCH_DEBOUNCE_TIME = 200;      // 防抖时间 200ms
+
 // 输入状态机(用于处理按键输入设定电压和电流)
 typedef enum {    // enum是定义枚举类型的关键字
   INPUT_IDLE = 0, // 空闲状态,从0开始
@@ -442,6 +446,9 @@ int main(void) {
   MX_TIM1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+
+  // 初始化PB9为低电平输出
+  HAL_GPIO_WritePin(EnableSwitch_GPIO_Port, EnableSwitch_Pin, GPIO_PIN_RESET);
 
   // u8 t = ' ';
   delay_init();
