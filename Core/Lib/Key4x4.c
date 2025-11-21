@@ -3,10 +3,23 @@
 #include "main.h"
 #include "stm32f1xx_hal.h"
 
-// anxia是是否按下
+// anxia是是否按下且触发事件标志(释放)
+// anxia为完整按键触发流程,包括按下和释放(长按类释放)
 uint8_t anxia = 0;
 // key是按下的键值索引
 uint8_t key = 0;
+// 新增：长按标志 (1=长按, 0=短按)
+uint8_t key_long_press = 0;
+
+// 长按时间阈值 (毫秒)
+#define LONG_PRESS_TIME 1000
+
+// 新增：按键状态机
+static uint8_t key_pressed = 0;          // 按键是否被按下
+static uint8_t key_processed = 0;        // 按键是否已处理（防止重复触发）
+static uint32_t key_press_start = 0;     // 按键按下时间戳
+static uint8_t last_key_index = 0xFF;    // 上次按键索引
+static uint8_t long_press_triggered = 0; // 长按是否已触发
 
 // 行引脚定义 (输出) - 使用 CubeMX 生成的宏定义
 const uint16_t row_pins[4] = {
@@ -84,18 +97,24 @@ static void Set_All_Rows(GPIO_PinState state) {
 }
 
 /**
- * @brief  检测按键按下并等待释放
- * @param  col_pin: 列引脚编号
- * @param  key_index: 键值索引
+ * @brief  检查指定按键是否仍然按下
+ * @param  row: 行号
+ * @param  col: 列号
+ * @retval 1: 按下, 0: 释放
  */
-static void Do_Click(uint16_t col_pin, uint8_t key_index) {
-  anxia = 1;
-  key = key_index;
-
-  // 等待按键释放
-  while (HAL_GPIO_ReadPin(KEY_COL0_GPIO_Port, col_pin) == GPIO_PIN_RESET) {
-    DWT_Delay_us(100);
+static uint8_t Is_Key_Still_Pressed(uint8_t row, uint8_t col) {
+  // 设置当前行为低电平
+  for (uint8_t i = 0; i < 4; i++) {
+    HAL_GPIO_WritePin(KEY_ROW0_GPIO_Port, row_pins[i],
+                      (i == row) ? GPIO_PIN_RESET : GPIO_PIN_SET);
   }
+
+  DWT_Delay_us(10); // 等待电平稳定
+
+  // 检查列引脚
+  GPIO_PinState state = HAL_GPIO_ReadPin(KEY_COL0_GPIO_Port, col_pins[col]);
+
+  return (state == GPIO_PIN_RESET) ? 1 : 0;
 }
 
 /**
@@ -123,7 +142,29 @@ static uint8_t KEY_Scan_Row(uint8_t row) {
       if (HAL_GPIO_ReadPin(KEY_COL0_GPIO_Port, col_pins[col]) ==
           GPIO_PIN_RESET) {
         uint8_t key_index = row * 4 + col;
-        Do_Click(col_pins[col], key_index);
+
+        // 如果是新按键按下
+        if (!key_pressed || last_key_index != key_index) {
+          key_pressed = 1;
+          key_processed = 0;
+          key_press_start = HAL_GetTick();
+          last_key_index = key_index;
+          key = key_index;
+          key_long_press = 0;
+          long_press_triggered = 0;
+          anxia = 0; // 按下时不触发事件
+        }
+        // 如果是同一个按键持续按下
+        else if (key_index == 12 &&
+                 !long_press_triggered) { // 只对 '*' 键检测长按
+          uint32_t press_duration = HAL_GetTick() - key_press_start;
+          if (press_duration >= LONG_PRESS_TIME) {
+            key_long_press = 1;
+            long_press_triggered = 1; // 标记长按已触发，避免重复
+            anxia = 1; // 触发按键事件,直接Clear,而不是等待释放(失去长按作用)
+          }
+        }
+
         return 1;
       }
     }
@@ -133,17 +174,48 @@ static uint8_t KEY_Scan_Row(uint8_t row) {
 }
 
 /**
- * @brief  扫描 4x4 矩阵键盘
+ * @brief  扫描 4x4 矩阵键盘 (非阻塞式)
  * @note   调用此函数检测按键,建议在主循环中周期调用
  */
 void KEY_Scan(void) {
-  anxia = 0;
+  uint8_t key_found = 0;
 
   // 扫描所有行
   for (uint8_t row = 0; row < 4; row++) {
     if (KEY_Scan_Row(row)) {
+      key_found = 1;
       break;
     }
+  }
+
+  // 如果之前有按键按下，但现在没有检测到
+  if (key_pressed && !key_found) {
+    // 检查按键是否真的释放了
+    uint8_t row = last_key_index / 4;
+    uint8_t col = last_key_index % 4;
+
+    if (!Is_Key_Still_Pressed(row, col)) {
+      // 按键释放 - 在释放时触发事件
+      anxia = 1; // 标记有按键事件
+
+      // 如果没有触发长按，则为短按
+      if (!long_press_triggered) {
+        key_long_press = 0;
+      }
+      // 如果已触发长按，key_long_press 保持为 1
+
+      key_pressed = 0;
+      key_processed = 0;
+      long_press_triggered = 0;
+
+      // 释放后延迟，防止抖动
+      delay_ms(50);
+    }
+  }
+
+  // 如果没有找到按键且没有按键按下状态，清除事件标志
+  if (!key_found && !key_pressed && key_processed) {
+    anxia = 0;
   }
 
   // 恢复所有行为高电平
@@ -169,9 +241,17 @@ uint16_t Key_Read(void) {
 uint8_t Key_IsPressed(void) { return anxia; }
 
 /**
+ * @brief  检查是否长按
+ * @retval 1: 长按, 0: 短按
+ */
+uint8_t Key_IsLongPress(void) { return key_long_press; }
+
+/**
  * @brief  清除按键状态
  */
 void Key_Clear(void) {
   anxia = 0;
   key = 0;
+  key_long_press = 0;
+  key_processed = 1; // 标记已处理
 }

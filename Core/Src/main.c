@@ -57,6 +57,7 @@
 /* USER CODE BEGIN PV */
 uint32_t last_oled_update = 0;              // 上次 OLED 更新时间计数
 const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms = 1s
+const uint32_t HEALTH_SHOWTIME = 300;       // 自检 显示间隔时间 300ms
 
 // 输入状态机(用于处理按键输入设定电压和电流)
 typedef enum {    // enum是定义枚举类型的关键字
@@ -313,6 +314,8 @@ static uint8_t Validate_And_Set_Value(void) {
  * @param  key: 按键字符
  */
 static void Process_Key_Input(char key) {
+  // 2025.11.21 新增：取消按键长按为之前的全清空
+
   switch (input_state) {
     // 如果在空闲状态按下时候:
   case INPUT_IDLE:
@@ -330,13 +333,28 @@ static void Process_Key_Input(char key) {
       encoder_v_active = 0; // 清除编码器状态
       encoder_i_active = 0;
       Display_Input_Prompt();
-    } else if (key == 'C') {
-      // 取消/清除设定值 Clear
-      SetVoltage = 0.0f;
-      SetCurrent = 0.0f;
-      OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-      OLED_Refresh();
-      HAL_Delay(1000);
+    }
+
+    /*  暂时空出C清零,给后面的ON/OFF功能
+    // else if (key == 'C') {
+    //   // 取消/清除设定值 Clear (保留C键功能)
+    //   SetVoltage = 0.0f;
+    //   SetCurrent = 0.0f;
+    //   OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
+    //   OLED_Refresh();
+    //   HAL_Delay(1000);
+    // }
+    */
+
+    else if (key == '*') {
+      // 空闲状态下的*键：长按清空，短按无操作
+      if (Key_IsLongPress()) {
+        SetVoltage = 0.0f;
+        SetCurrent = 0.0f;
+        OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
+        OLED_Refresh();
+        HAL_Delay(1000);
+      }
     }
     break;
 
@@ -359,15 +377,24 @@ static void Process_Key_Input(char key) {
         }
       }
     } else if (key == '*') {
-      // 退格/取消
-      // 返回空闲状态
-      input_state = INPUT_IDLE;
-      // 清空输入缓冲区
-      Clear_Input_Buffer();
-      // 取消提示
-      OLED_ShowString(0, 54, (uint8_t *)"  --- Cancel ---       ", 8, 1);
-      OLED_Refresh();
-      HAL_Delay(1000);
+      // 输入状态下的*键
+      if (Key_IsLongPress()) {
+        // 长按：全清空 (类似原C键功能)
+        input_state = INPUT_IDLE;
+        Clear_Input_Buffer();
+        SetVoltage = 0.0f;
+        SetCurrent = 0.0f;
+        OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
+        OLED_Refresh();
+        HAL_Delay(1000);
+      } else {
+        // 短按：退格/取消 (原有功能)
+        input_state = INPUT_IDLE;
+        Clear_Input_Buffer();
+        OLED_ShowString(0, 54, (uint8_t *)"  --- Cancel ---       ", 8, 1);
+        OLED_Refresh();
+        HAL_Delay(1000);
+      }
 
     } else if ((key >= '0' && key <= '9') || key == '.') {
       if (input_index < 8) {
@@ -553,11 +580,11 @@ int main(void) {
   }
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(2000);
+  HAL_Delay(1000);
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
   // ========== 步骤3: 读取STATUS寄存器 ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"3.Read STATUS...       ", 8, 1);
@@ -573,7 +600,7 @@ int main(void) {
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
   // ========== 步骤4: 设置GAIN寄存器 ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"4.Set GAIN...       ", 8, 1);
@@ -591,13 +618,13 @@ int main(void) {
     OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   }
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
 
   // ========== 步骤5: 检查REF-ALARM ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"5.Check REF...       ", 8, 1);
   OLED_Refresh();
-  HAL_Delay(300);
+  HAL_Delay(HEALTH_SHOWTIME);
 
   // 修改: 检查两个DAC的REF-ALARM
   int alarm_v = DAC60501_RefAlarm_Addr(DAC_VOLTAGE_ADDR);
@@ -610,16 +637,16 @@ int main(void) {
     OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   }
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
   // ========== 步骤6: 测试电压输出(增强版) ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output...", 8, 1);
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(HEALTH_SHOWTIME);
 
   // 先读取CONFIG寄存器
   I2C_WriteByte_Addr(DAC_VOLTAGE_ADDR, CONFIG, 0x0000); // 复位V CONFIG寄存器
@@ -629,7 +656,7 @@ int main(void) {
   sprintf(dac_msg, "CFG:V-%04X,I-%04X", V_config_reg, I_config_reg);
   OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(1000);
+  HAL_Delay(500);
 
   // 清屏,开始详细测试
   OLED_Clear();
@@ -712,7 +739,7 @@ int main(void) {
   sprintf(dac_msg, "SYN-V:%04X-I:%04X", sync_reg_v, sync_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(1000);
+  HAL_Delay(500);
 
   // ========== 额外诊断: 检查TRIGGER寄存器  ==========
   diag_line += 10;
@@ -721,7 +748,7 @@ int main(void) {
   sprintf(dac_msg, "TRIG-V:%04X-I:%04X", trigger_reg_v, trigger_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(1000);
+  HAL_Delay(500);
 
   // ========== 诊断总结 - 修改判断条件 ==========
   diag_line += 10;
@@ -733,7 +760,7 @@ int main(void) {
   }
 
   OLED_Refresh();
-  HAL_Delay(5000); // 显示诊断结果5秒
+  HAL_Delay(2000); // 显示诊断结果2秒
   // ============ DAC诊断结束 ============
 
   // LED7显示
@@ -759,6 +786,7 @@ int main(void) {
 
     if (Key_IsPressed()) {
       uint16_t key_val = Key_Read();
+      // 将按键值转换为字符
       char key = (char)key_val;
       // 处理按键输入
       Process_Key_Input(key);
