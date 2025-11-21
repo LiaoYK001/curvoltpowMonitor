@@ -73,20 +73,14 @@ float SetVoltage = 0.00f; // 设定电压 (V)
 float SetCurrent = 0.00f; // 设定电流 (A)
 
 // 旋转编码器相关变量
-uint16_t V_encoder_last_cnt = 1000;        // 上次电压编码器计数值
-uint16_t I_encoder_last_cnt = 1000;        // 上次电流编码器计数值
-const float ENCODER_STEP_FINE = 0.01f;     // 编码器精调步进
-const float ENCODER_STEP_COARSE_V = 0.50f; // 电压粗调步进
-const float ENCODER_STEP_COARSE_I = 0.10f; // 电流粗调步进
-uint8_t encoder_v_active = 0;              // 电压编码器激活标志
-uint8_t encoder_i_active = 0;              // 电流编码器激活标志
-uint32_t encoder_v_last_time = 0;          // 电压编码器上次活动时间
-uint32_t encoder_i_last_time = 0;          // 电流编码器上次活动时间
-const uint32_t ENCODER_TIMEOUT = 2000;     // 编码器提示超时时间(ms)
-
-// 粗调/精调模式标志
-uint8_t voltage_coarse_mode = 0; // 电压粗调模式标志
-uint8_t current_coarse_mode = 0; // 电流粗调模式标志
+uint16_t V_encoder_last_cnt = 1000;    // 上次电压编码器计数值
+uint16_t I_encoder_last_cnt = 1000;    // 上次电流编码器计数值
+const float ENCODER_STEP = 0.01f;      // 编码器单步调节量
+uint8_t encoder_v_active = 0;          // 电压编码器激活标志
+uint8_t encoder_i_active = 0;          // 电流编码器激活标志
+uint32_t encoder_v_last_time = 0;      // 电压编码器上次活动时间
+uint32_t encoder_i_last_time = 0;      // 电流编码器上次活动时间
+const uint32_t ENCODER_TIMEOUT = 2000; // 编码器提示超时时间(ms)
 
 // DAC相关常量
 // const float DAC_VREF = 2.5f;     // DAC内部参考电压 2.5V
@@ -142,23 +136,13 @@ static void Display_Input_Prompt(void) {
     // 检查电压编码器是否在超时时间内活动
     if (encoder_v_active &&
         (current_time - encoder_v_last_time) < ENCODER_TIMEOUT) {
-      // 显示粗调/精调模式
-      if (voltage_coarse_mode) {
-        sprintf(prompt, "[COARSE] V:%.2fV  ", SetVoltage);
-      } else {
-        sprintf(prompt, "[FINE] V:%.2fV    ", SetVoltage);
-      }
+      sprintf(prompt, "[SET] V:%.2fV      ", SetVoltage);
       OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
     }
     // 检查电流编码器是否在超时时间内活动
     else if (encoder_i_active &&
              (current_time - encoder_i_last_time) < ENCODER_TIMEOUT) {
-      // 显示粗调/精调模式
-      if (current_coarse_mode) {
-        sprintf(prompt, "[COARSE] I:%.2fA  ", SetCurrent);
-      } else {
-        sprintf(prompt, "[FINE] I:%.2fA    ", SetCurrent);
-      }
+      sprintf(prompt, "[SET] I:%.2fA      ", SetCurrent);
       OLED_ShowString(0, 54, (uint8_t *)prompt, 8, 1);
     }
     // 超时后清除提示
@@ -181,24 +165,6 @@ static void Display_Input_Prompt(void) {
 static void Process_Encoder(void) {
   uint32_t current_time = HAL_GetTick();
 
-  // ========== 检测电压编码器按钮状态（粗调/精调切换）==========
-  // 低电平 = 按下 = 粗调模式
-  if (HAL_GPIO_ReadPin(Coarse_Detector_V_GPIO_Port, Coarse_Detector_V_Pin) ==
-      GPIO_PIN_RESET) {
-    voltage_coarse_mode = 1;
-  } else {
-    voltage_coarse_mode = 0;
-  }
-
-  // ========== 检测电流编码器按钮状态（粗调/精调切换）==========
-  // 低电平 = 按下 = 粗调模式
-  if (HAL_GPIO_ReadPin(Coarse_Detector_I_GPIO_Port, Coarse_Detector_I_Pin) ==
-      GPIO_PIN_RESET) {
-    current_coarse_mode = 1;
-  } else {
-    current_coarse_mode = 0;
-  }
-
   // ========== 处理电压编码器 (TIM1) ==========
   uint16_t V_encoder_cnt = __HAL_TIM_GET_COUNTER(&htim1);
   int16_t V_cnt_diff =
@@ -206,12 +172,8 @@ static void Process_Encoder(void) {
 
   // 限制单次调整幅度,防止异常跳变
   if (abs(V_cnt_diff) > 0 && abs(V_cnt_diff) <= 100) {
-    // 根据粗调/精调模式选择步进值
-    float v_step =
-        voltage_coarse_mode ? ENCODER_STEP_COARSE_V : ENCODER_STEP_FINE;
-
     // 计算新电压值
-    float new_voltage = SetVoltage + V_cnt_diff * v_step;
+    float new_voltage = SetVoltage + V_cnt_diff * (ENCODER_STEP * 5.0f);
 
     // 限制范围 0.00 - MAX_VOLTAGE
     if (new_voltage < 0.0f) {
@@ -238,12 +200,8 @@ static void Process_Encoder(void) {
 
   // 限制单次调整幅度,防止异常跳变
   if (abs(I_cnt_diff) > 0 && abs(I_cnt_diff) <= 100) {
-    // 根据粗调/精调模式选择步进值
-    float i_step =
-        current_coarse_mode ? ENCODER_STEP_COARSE_I : ENCODER_STEP_FINE;
-
     // 计算新电流值
-    float new_current = SetCurrent + I_cnt_diff * i_step;
+    float new_current = SetCurrent + I_cnt_diff * ENCODER_STEP;
 
     // 限制范围 0.00 - MAX_CURRENT
     if (new_current < 0.0f) {
@@ -778,26 +736,6 @@ int main(void) {
       }
     }
 
-    // 旋转编码器激活显示指示
-    char voltage_coarse_mode_prompt[4] = "";
-    char current_coarse_mode_prompt[4] = "";
-
-    if (encoder_v_active) {
-      if (voltage_coarse_mode == 0) {
-        sprintf(voltage_coarse_mode_prompt, "*");
-      } else {
-        sprintf(voltage_coarse_mode_prompt, "**");
-      }
-    }
-
-    if (encoder_i_active) {
-      if (current_coarse_mode == 0) {
-        sprintf(current_coarse_mode_prompt, "*");
-      } else {
-        sprintf(current_coarse_mode_prompt, "**");
-      }
-    }
-
     // 定时更新 INA260 和 OLED 显示
     // while是 20ms 循环一次，等待 1s 更新一次OLED显示
     if ((current_time - last_oled_update) >= OLED_UPDATE_INTERVAL) {
@@ -812,11 +750,10 @@ int main(void) {
       // 读取并显示电压
       if (ina260_get_voltage(&voltage_mv) == INA_STATUS_OK) {
         if (voltage_mv > 1000) {
-          sprintf(buffer, "%sSV:%.2fV V:%.2fV   ", voltage_coarse_mode_prompt,
-                  SetVoltage, voltage_mv / 1000.0f);
+          sprintf(buffer, "SV:%.2fV V:%.2fV   ", SetVoltage,
+                  voltage_mv / 1000.0f);
         } else {
-          sprintf(buffer, "%sSV:%.2fV V:%.0fmV   ", voltage_coarse_mode_prompt,
-                  SetVoltage, voltage_mv);
+          sprintf(buffer, "SV:%.2fV V:%.0fmV   ", SetVoltage, voltage_mv);
         }
         OLED_ShowString(0, 18, (uint8_t *)buffer, 12, 1);
       }
@@ -824,11 +761,10 @@ int main(void) {
       // 读取并显示电流
       if (ina260_get_current(&current_ma) == INA_STATUS_OK) {
         if (fabs(current_ma) > 1000) {
-          sprintf(buffer, "%sSI:%.2fA I:%.2fA   ", current_coarse_mode_prompt,
-                  SetCurrent, current_ma / 1000.0f);
+          sprintf(buffer, "SI:%.2fA I:%.2fA   ", SetCurrent,
+                  current_ma / 1000.0f);
         } else {
-          sprintf(buffer, "%sSI:%.2fA I:%.0fmA   ", current_coarse_mode_prompt,
-                  SetCurrent, current_ma);
+          sprintf(buffer, "SI:%.2fA I:%.0fmA   ", SetCurrent, current_ma);
         }
         OLED_ShowString(0, 18 + 10, (uint8_t *)buffer, 12, 1);
       }
@@ -869,9 +805,8 @@ int main(void) {
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-
-  /* USER CODE END 3 */
 }
+/* USER CODE END 3 */
 
 /**
  * @brief System Clock Configuration

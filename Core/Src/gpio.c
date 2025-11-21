@@ -45,7 +45,6 @@ void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -55,12 +54,6 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, a7led_Pin|OLED_SCL_Pin|OLED_SDA_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : Coarse_Detector_V_Pin Coarse_Detector_I_Pin */
-  GPIO_InitStruct.Pin = Coarse_Detector_V_Pin|Coarse_Detector_I_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : KEY_ROW0_Pin KEY_ROW1_Pin KEY_ROW2_Pin KEY_ROW3_Pin */
   GPIO_InitStruct.Pin = KEY_ROW0_Pin|KEY_ROW1_Pin|KEY_ROW2_Pin|KEY_ROW3_Pin;
