@@ -57,6 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define Coarse_Detector_V_Pin GPIO_PIN_14
+#define Coarse_Detector_V_GPIO_Port GPIOC
+#define Coarse_Detector_I_Pin GPIO_PIN_15
+#define Coarse_Detector_I_GPIO_Port GPIOC
 #define KEY_ROW0_Pin GPIO_PIN_0
 #define KEY_ROW0_GPIO_Port GPIOA
 #define KEY_ROW1_Pin GPIO_PIN_1
