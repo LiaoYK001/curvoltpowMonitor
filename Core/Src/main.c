@@ -18,9 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "gpio.h"
 #include "i2c.h"
+#include "stm32f103xb.h"
+#include "stm32f1xx_hal_gpio.h"
 #include "tim.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -57,7 +59,6 @@
 /* USER CODE BEGIN PV */
 uint32_t last_oled_update = 0;              // 上次 OLED 更新时间计数
 const uint32_t OLED_UPDATE_INTERVAL = 1000; // OLED 更新间隔 1000ms = 1s
-const uint32_t HEALTH_SHOWTIME = 300;       // 自检 显示间隔时间 300ms
 
 // 输入状态机(用于处理按键输入设定电压和电流)
 typedef enum {    // enum是定义枚举类型的关键字
@@ -71,7 +72,7 @@ char input_buffer[10] = {0};           // 输入缓冲区
 uint8_t input_index = 0;               // 输入位置
 
 float SetVoltage = 0.00f; // 设定电压 (V)
-float SetCurrent = 0.00f; // 设定电流 (A)
+float SetCurrent = 1.00f; // 设定电流 (A)
 
 // 旋转编码器相关变量
 uint16_t V_encoder_last_cnt = 1000;        // 上次电压编码器计数值
@@ -314,8 +315,6 @@ static uint8_t Validate_And_Set_Value(void) {
  * @param  key: 按键字符
  */
 static void Process_Key_Input(char key) {
-  // 2025.11.21 新增：取消按键长按为之前的全清空
-
   switch (input_state) {
     // 如果在空闲状态按下时候:
   case INPUT_IDLE:
@@ -333,28 +332,13 @@ static void Process_Key_Input(char key) {
       encoder_v_active = 0; // 清除编码器状态
       encoder_i_active = 0;
       Display_Input_Prompt();
-    }
-
-    /*  暂时空出C清零,给后面的ON/OFF功能
-    // else if (key == 'C') {
-    //   // 取消/清除设定值 Clear (保留C键功能)
-    //   SetVoltage = 0.0f;
-    //   SetCurrent = 0.0f;
-    //   OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-    //   OLED_Refresh();
-    //   HAL_Delay(1000);
-    // }
-    */
-
-    else if (key == '*') {
-      // 空闲状态下的*键：长按清空，短按无操作
-      if (Key_IsLongPress()) {
-        SetVoltage = 0.0f;
-        SetCurrent = 0.0f;
-        OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-        OLED_Refresh();
-        HAL_Delay(1000);
-      }
+    } else if (key == 'C') {
+      // 取消/清除设定值 Clear
+      SetVoltage = 0.0f;
+      SetCurrent = 0.0f;
+      OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
+      OLED_Refresh();
+      HAL_Delay(1000);
     }
     break;
 
@@ -377,24 +361,15 @@ static void Process_Key_Input(char key) {
         }
       }
     } else if (key == '*') {
-      // 输入状态下的*键
-      if (Key_IsLongPress()) {
-        // 长按：全清空 (类似原C键功能)
-        input_state = INPUT_IDLE;
-        Clear_Input_Buffer();
-        SetVoltage = 0.0f;
-        SetCurrent = 0.0f;
-        OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-        OLED_Refresh();
-        HAL_Delay(1000);
-      } else {
-        // 短按：退格/取消 (原有功能)
-        input_state = INPUT_IDLE;
-        Clear_Input_Buffer();
-        OLED_ShowString(0, 54, (uint8_t *)"  --- Cancel ---       ", 8, 1);
-        OLED_Refresh();
-        HAL_Delay(1000);
-      }
+      // 退格/取消
+      // 返回空闲状态
+      input_state = INPUT_IDLE;
+      // 清空输入缓冲区
+      Clear_Input_Buffer();
+      // 取消提示
+      OLED_ShowString(0, 54, (uint8_t *)"  --- Cancel ---       ", 8, 1);
+      OLED_Refresh();
+      HAL_Delay(1000);
 
     } else if ((key >= '0' && key <= '9') || key == '.') {
       if (input_index < 8) {
@@ -437,10 +412,11 @@ static int Update_DAC_Outputs(void) {
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
 
   /* USER CODE BEGIN 1 */
 
@@ -448,8 +424,7 @@ int main(void) {
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
-   */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -505,7 +480,7 @@ int main(void) {
 
   // 初始化 INA260 引用和参考: https://github.com/xupenghu/ina260
   int ret = ina260_init_default(INA260_SLAVE_ADDRESS);
-
+  
   OLED_Clear();
   OLED_CN(28, 6, 6, 12, 1, 1);
   if (ret == INA_STATUS_OK) {
@@ -533,7 +508,11 @@ int main(void) {
   OLED_ShowString(0, 20, (uint8_t *)"DAC60501 Diagnostic", 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
-
+  
+  //PB9 置高
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET)    ; // CC LED ON   
+  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET)    ; // CV LED ON
   char dac_msg[32];
   uint8_t diag_line = 30; // 诊断信息起始行
 
@@ -580,11 +559,11 @@ int main(void) {
   }
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(1000);
+  HAL_Delay(2000);
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
   // ========== 步骤3: 读取STATUS寄存器 ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"3.Read STATUS...       ", 8, 1);
@@ -600,7 +579,7 @@ int main(void) {
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
   // ========== 步骤4: 设置GAIN寄存器 ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"4.Set GAIN...       ", 8, 1);
@@ -618,13 +597,13 @@ int main(void) {
     OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   }
   OLED_Refresh();
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
 
   // ========== 步骤5: 检查REF-ALARM ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"5.Check REF...       ", 8, 1);
   OLED_Refresh();
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(300);
 
   // 修改: 检查两个DAC的REF-ALARM
   int alarm_v = DAC60501_RefAlarm_Addr(DAC_VOLTAGE_ADDR);
@@ -637,16 +616,16 @@ int main(void) {
     OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   }
   OLED_Refresh();
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
   // ========== 步骤6: 测试电压输出(增强版) ==========
   diag_line += 10;
   OLED_ShowString(0, diag_line, (uint8_t *)"6.Test Output...", 8, 1);
   OLED_Refresh();
-  HAL_Delay(HEALTH_SHOWTIME);
+  HAL_Delay(500);
 
   // 先读取CONFIG寄存器
   I2C_WriteByte_Addr(DAC_VOLTAGE_ADDR, CONFIG, 0x0000); // 复位V CONFIG寄存器
@@ -656,7 +635,7 @@ int main(void) {
   sprintf(dac_msg, "CFG:V-%04X,I-%04X", V_config_reg, I_config_reg);
   OLED_ShowString(0, diag_line + 10, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(1000);
 
   // 清屏,开始详细测试
   OLED_Clear();
@@ -739,7 +718,7 @@ int main(void) {
   sprintf(dac_msg, "SYN-V:%04X-I:%04X", sync_reg_v, sync_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(1000);
 
   // ========== 额外诊断: 检查TRIGGER寄存器  ==========
   diag_line += 10;
@@ -748,7 +727,7 @@ int main(void) {
   sprintf(dac_msg, "TRIG-V:%04X-I:%04X", trigger_reg_v, trigger_reg_i);
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
-  HAL_Delay(500);
+  HAL_Delay(1000);
 
   // ========== 诊断总结 - 修改判断条件 ==========
   diag_line += 10;
@@ -760,7 +739,7 @@ int main(void) {
   }
 
   OLED_Refresh();
-  HAL_Delay(2000); // 显示诊断结果2秒
+  HAL_Delay(5000); // 显示诊断结果5秒
   // ============ DAC诊断结束 ============
 
   // LED7显示
@@ -784,9 +763,21 @@ int main(void) {
     // 高频率扫描键盘
     KEY_Scan();
 
+    //on或off按键控制
+    if (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET) // GPIO_PIN_RESET 表示低电平
+    {
+      HAL_Delay(20); // 1.延时20毫秒以消除机械抖动
+      // 2. 再次确认按键是否仍然被按下
+      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_RESET)
+      {
+        // 3. 执行翻转PB9电平的操作
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
+        // 4. 等待按键松开，防止长按时连续翻转
+        while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_RESET);
+      }
+    }
     if (Key_IsPressed()) {
       uint16_t key_val = Key_Read();
-      // 将按键值转换为字符
       char key = (char)key_val;
       // 处理按键输入
       Process_Key_Input(key);
@@ -894,24 +885,25 @@ int main(void) {
 
     HAL_Delay(20);
   }
-  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-  /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 
   /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -919,20 +911,22 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
-                                RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
     Error_Handler();
   }
 }
@@ -942,10 +936,11 @@ void SystemClock_Config(void) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
@@ -955,13 +950,14 @@ void Error_Handler(void) {
 }
 #ifdef USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t *file, uint32_t line) {
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line
      number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,

@@ -79,10 +79,18 @@ void Error_Handler(void);
 #define KEY_COL3_GPIO_Port GPIOA
 #define a7led_Pin GPIO_PIN_0
 #define a7led_GPIO_Port GPIOB
+#define CC_LED_Pin GPIO_PIN_10
+#define CC_LED_GPIO_Port GPIOA
+#define CV_LED_Pin GPIO_PIN_11
+#define CV_LED_GPIO_Port GPIOA
 #define OLED_SCL_Pin GPIO_PIN_4
 #define OLED_SCL_GPIO_Port GPIOB
 #define OLED_SDA_Pin GPIO_PIN_5
 #define OLED_SDA_GPIO_Port GPIOB
+#define on_off_switch_Pin GPIO_PIN_8
+#define on_off_switch_GPIO_Port GPIOB
+#define switch_vcc_Pin GPIO_PIN_9
+#define switch_vcc_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
