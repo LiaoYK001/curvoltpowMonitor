@@ -20,6 +20,8 @@
 #include "main.h"
 #include "gpio.h"
 #include "i2c.h"
+#include "stm32f103xb.h"
+#include "stm32f1xx_hal_gpio.h"
 #include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -71,7 +73,7 @@ char input_buffer[10] = {0};           // 输入缓冲区
 uint8_t input_index = 0;               // 输入位置
 
 float SetVoltage = 0.00f; // 设定电压 (V)
-float SetCurrent = 0.00f; // 设定电流 (A)
+float SetCurrent = 1.00f; // 设定电流 (A)
 
 // 旋转编码器相关变量
 uint16_t V_encoder_last_cnt = 1000;        // 上次电压编码器计数值
@@ -314,8 +316,6 @@ static uint8_t Validate_And_Set_Value(void) {
  * @param  key: 按键字符
  */
 static void Process_Key_Input(char key) {
-  // 2025.11.21 新增：取消按键长按为之前的全清空
-
   switch (input_state) {
     // 如果在空闲状态按下时候:
   case INPUT_IDLE:
@@ -534,6 +534,10 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(1000);
 
+  // PB9 置高
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON
+  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
   char dac_msg[32];
   uint8_t diag_line = 30; // 诊断信息起始行
 
@@ -784,6 +788,21 @@ int main(void) {
     // 高频率扫描键盘
     KEY_Scan();
 
+    // on或off按键控制 (非阻塞去抖动)
+    static uint32_t last_switch_time = 0;
+    static uint8_t switch_state = GPIO_PIN_SET;
+
+    uint8_t current_switch =
+        HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin);
+    if (current_switch != switch_state) {
+      if (current_time - last_switch_time > 20) { // 20ms debounce
+        switch_state = current_switch;
+        if (switch_state == GPIO_PIN_RESET) {
+          HAL_GPIO_TogglePin(switch_vcc_GPIO_Port, switch_vcc_Pin);
+        }
+        last_switch_time = current_time;
+      }
+    }
     if (Key_IsPressed()) {
       uint16_t key_val = Key_Read();
       // 将按键值转换为字符
