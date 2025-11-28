@@ -20,8 +20,6 @@
 #include "main.h"
 #include "gpio.h"
 #include "i2c.h"
-#include "stm32f103xb.h"
-#include "stm32f1xx_hal_gpio.h"
 #include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -108,7 +106,8 @@ static void Clear_Input_Buffer(void);
 static void Display_Input_Prompt(void);
 static uint8_t Validate_And_Set_Value(void);
 static void Process_Encoder(void);
-static int Update_DAC_Outputs(void); // 添加函数声明
+static int Update_DAC_Outputs(void); // 更新DAC输出函数声明
+static void Toggle_Output(void);     // 切换输出状态函数声明
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -315,6 +314,22 @@ static uint8_t Validate_And_Set_Value(void) {
 }
 
 /**
+ * @brief  切换输出状态 (ON/OFF)
+ * @note   切换 output_enabled 标志，同时控制 LED 指示灯
+ */
+static void Toggle_Output(void) {
+  // 切换输出状态
+  output_enabled = !output_enabled;
+  HAL_GPIO_TogglePin(switch_vcc_LED_GPIO_Port, switch_vcc_LED_Pin);
+
+  // OFF 状态下关闭所有指示灯
+  if (!output_enabled) {
+    HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
+  }
+}
+
+/**
  * @brief  处理按键输入
  * @param  key: 按键字符
  */
@@ -336,20 +351,10 @@ static void Process_Key_Input(char key) {
       encoder_v_active = 0; // 清除编码器状态
       encoder_i_active = 0;
       Display_Input_Prompt();
-    }
-
-    /*  暂时空出C清零,给后面的ON/OFF功能
-    // else if (key == 'C') {
-    //   // 取消/清除设定值 Clear (保留C键功能)
-    //   SetVoltage = 0.0f;
-    //   SetCurrent = 0.0f;
-    //   OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-    //   OLED_Refresh();
-    //   HAL_Delay(1000);
-    // }
-    */
-
-    else if (key == '*') {
+    } else if (key == 'C') {
+      // C键控制ON/OFF切换(之前是清空,现在交给空闲状态下的*键：长按清空)
+      Toggle_Output();
+    } else if (key == '*') {
       // 空闲状态下的*键：长按清空，短按无操作
       if (Key_IsLongPress()) {
         SetVoltage = 0.0f;
@@ -803,7 +808,7 @@ int main(void) {
         if (switch_state == GPIO_PIN_RESET) {
           // 切换输出状态
           output_enabled = !output_enabled;
-          HAL_GPIO_TogglePin(switch_vcc_GPIO_Port, switch_vcc_Pin);
+          HAL_GPIO_TogglePin(switch_vcc_LED_GPIO_Port, switch_vcc_LED_Pin);
 
           // OFF 状态下关闭所有指示灯
           if (!output_enabled) {
@@ -942,8 +947,13 @@ int main(void) {
       }
 
       // 只在非输入状态且编码器未激活时清除提示行
+      // 同时显示ON/OFF状态
       if (input_state == INPUT_IDLE && !encoder_v_active && !encoder_i_active) {
-        OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
+        if (output_enabled) {
+          OLED_ShowString(0, 54, (uint8_t *)"    ON                    ", 8, 1);
+        } else {
+          OLED_ShowString(0, 54, (uint8_t *)"    OFF                   ", 8, 1);
+        }
       }
 
       // 更新DAC输出 - 只在 ON 状态下输出设定值
