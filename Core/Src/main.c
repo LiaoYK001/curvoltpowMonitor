@@ -20,8 +20,6 @@
 #include "main.h"
 #include "gpio.h"
 #include "i2c.h"
-#include "stm32f103xb.h"
-#include "stm32f1xx_hal_gpio.h"
 #include "tim.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -91,6 +89,9 @@ const uint32_t ENCODER_TIMEOUT = 2000;     // 编码器提示超时时间(ms)
 uint8_t voltage_coarse_mode = 0; // 电压粗调模式标志
 uint8_t current_coarse_mode = 0; // 电流粗调模式标志
 
+// ON/OFF 状态标志
+uint8_t output_enabled = 0; // 输出使能标志: 0=OFF, 1=ON
+
 // DAC相关常量
 // const float DAC_VREF = 2.5f;     // DAC内部参考电压 2.5V
 // const float DAC_VOUT_MAX = 2.5f; // DAC最大输出电压 2.5V
@@ -105,7 +106,8 @@ static void Clear_Input_Buffer(void);
 static void Display_Input_Prompt(void);
 static uint8_t Validate_And_Set_Value(void);
 static void Process_Encoder(void);
-static int Update_DAC_Outputs(void); // 添加函数声明
+static int Update_DAC_Outputs(void); // 更新DAC输出函数声明
+static void Toggle_Output(void);     // 切换输出状态函数声明
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -312,6 +314,22 @@ static uint8_t Validate_And_Set_Value(void) {
 }
 
 /**
+ * @brief  切换输出状态 (ON/OFF)
+ * @note   切换 output_enabled 标志，同时控制 LED 指示灯
+ */
+static void Toggle_Output(void) {
+  // 切换输出状态
+  output_enabled = !output_enabled;
+  HAL_GPIO_TogglePin(switch_vcc_LED_GPIO_Port, switch_vcc_LED_Pin);
+
+  // OFF 状态下关闭所有指示灯
+  if (!output_enabled) {
+    HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
+  }
+}
+
+/**
  * @brief  处理按键输入
  * @param  key: 按键字符
  */
@@ -333,20 +351,10 @@ static void Process_Key_Input(char key) {
       encoder_v_active = 0; // 清除编码器状态
       encoder_i_active = 0;
       Display_Input_Prompt();
-    }
-
-    /*  暂时空出C清零,给后面的ON/OFF功能
-    // else if (key == 'C') {
-    //   // 取消/清除设定值 Clear (保留C键功能)
-    //   SetVoltage = 0.0f;
-    //   SetCurrent = 0.0f;
-    //   OLED_ShowString(0, 54, (uint8_t *)"  --- Clear OK ---       ", 8, 1);
-    //   OLED_Refresh();
-    //   HAL_Delay(1000);
-    // }
-    */
-
-    else if (key == '*') {
+    } else if (key == 'C') {
+      // C键控制ON/OFF切换(之前是清空,现在交给空闲状态下的*键：长按清空)
+      Toggle_Output();
+    } else if (key == '*') {
       // 空闲状态下的*键：长按清空，短按无操作
       if (Key_IsLongPress()) {
         SetVoltage = 0.0f;
@@ -492,7 +500,7 @@ int main(void) {
   uint8_t codecyh[10] = "23211288";
   OLED_Clear();
   OLED_Refresh();
-  OLED_CN(28, 6, 6, 12, 1, 1);
+  OLED_CN(28, 6, 6, 12, 1, 1); // 主标题
   OLED_CN(0, 20, 4, 12, 1, 2);
   OLED_ShowString(50, 20, codehyz, 12, 1);
   OLED_CN(0, 36, 4, 12, 1, 3);
@@ -507,9 +515,9 @@ int main(void) {
   int ret = ina260_init_default(INA260_SLAVE_ADDRESS);
 
   OLED_Clear();
-  OLED_CN(28, 6, 6, 12, 1, 1);
+  OLED_CN(28, 6, 6, 12, 1, 1); // 主标题
   if (ret == INA_STATUS_OK) {
-    OLED_ShowString(0, 24, (uint8_t *)"INA260 OK", 16, 1);
+    // OLED_ShowString(0, 24, (uint8_t *)"INA260 OK", 16, 1);
 
     // 配置工作模式
     // operating_type: iotPower (default) - 同时测电流和电压
@@ -525,8 +533,9 @@ int main(void) {
     OLED_ShowString(0, 24, (uint8_t *)"INA260 ERR", 16, 1);
   }
   OLED_Refresh();
-  HAL_Delay(1500);
+  HAL_Delay(500);
 
+  /*
   // ============ DAC60501 开机自检 ============
   OLED_Clear();
   OLED_CN(28, 6, 6, 12, 1, 1); // 显示标题
@@ -535,9 +544,9 @@ int main(void) {
   HAL_Delay(1000);
 
   // PB9 置高
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON
-  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
+  // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  // HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON
+  // HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
   char dac_msg[32];
   uint8_t diag_line = 30; // 诊断信息起始行
 
@@ -766,6 +775,7 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(2000); // 显示诊断结果2秒
   // ============ DAC诊断结束 ============
+*/
 
   // LED7显示
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_SET);
@@ -788,17 +798,25 @@ int main(void) {
     // 高频率扫描键盘
     KEY_Scan();
 
-    // on或off按键控制 (非阻塞去抖动)
+    // ON/OFF 按键控制 (非阻塞去抖动)
     static uint32_t last_switch_time = 0;
     static uint8_t switch_state = GPIO_PIN_SET;
 
     uint8_t current_switch =
         HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin);
     if (current_switch != switch_state) {
-      if (current_time - last_switch_time > 20) { // 20ms debounce
+      if (current_time - last_switch_time > 20) { // 20ms debounce time 防抖
         switch_state = current_switch;
         if (switch_state == GPIO_PIN_RESET) {
-          HAL_GPIO_TogglePin(switch_vcc_GPIO_Port, switch_vcc_Pin);
+          // 切换输出状态
+          output_enabled = !output_enabled;
+          HAL_GPIO_TogglePin(switch_vcc_LED_GPIO_Port, switch_vcc_LED_Pin);
+
+          // OFF 状态下关闭所有指示灯
+          if (!output_enabled) {
+            HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
+          }
         }
         last_switch_time = current_time;
       }
@@ -889,13 +907,69 @@ int main(void) {
       }
       OLED_ShowString(0, 18 + 10 * 2, (uint8_t *)buffer, 12, 1);
 
-      // 只在非输入状态且编码器未激活时清除提示行
-      if (input_state == INPUT_IDLE && !encoder_v_active && !encoder_i_active) {
-        OLED_ShowString(0, 54, (uint8_t *)"                          ", 8, 1);
+      // CV/CC 指示灯控制 - 只在 ON 状态下工作
+      if (output_enabled) {
+        // 计算设定值与实际值的比例
+        // 避免除以零错误
+        float voltage_ratio =
+            (SetVoltage > 0.01f) ? (voltage_mv / 1000.0f) / SetVoltage : 0.0f;
+        float current_ratio =
+            (SetCurrent > 0.01f) ? (current_ma / 1000.0f) / SetCurrent : 0.0f;
+
+        // 判断工作模式:
+        // CC模式: 实际电流接近设定电流（电流限制生效）
+        // CV模式: 实际电压接近设定电压（电压限制生效）
+        // 使用 95% 阈值判断是否达到限制
+        uint8_t is_cc_mode =
+            (current_ratio >= 0.95f) && (current_ma > 10.0f); // 电流达到设定值
+        uint8_t is_cv_mode =
+            (voltage_ratio >= 0.95f) && (voltage_mv > 100.0f); // 电压达到设定值
+
+        if (is_cc_mode && !is_cv_mode) {
+          // 恒流模式: CC亮, CV灭
+          HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+        } else if (is_cv_mode && !is_cc_mode) {
+          // 恒压模式: CV亮, CC灭
+          HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
+        } else if (is_cv_mode && is_cc_mode) {
+          // 同时达到限制: 还是只CC
+          HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+          HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET);
+        } else {
+          // 都未达到限制（轻载或无负载）: 只亮CV
+          HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
+        }
+      } else {
+        // OFF 状态: 两个指示灯都关闭
+        HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_RESET);
       }
 
-      // 更新DAC输出
-      int dac_ret = Update_DAC_Outputs();
+      // 只在非输入状态且编码器未激活时清除提示行
+      // 同时显示ON/OFF状态
+      if (input_state == INPUT_IDLE && !encoder_v_active && !encoder_i_active) {
+        if (output_enabled) {
+          OLED_ShowString(0, 54, (uint8_t *)"    ON                    ", 8, 1);
+        } else {
+          OLED_ShowString(0, 54, (uint8_t *)"    OFF                   ", 8, 1);
+        }
+      }
+
+      // 更新DAC输出 - 只在 ON 状态下输出设定值
+      int dac_ret;
+      if (output_enabled) {
+        // dac_ret用于错误检测
+        dac_ret = Update_DAC_Outputs();
+      } else {
+        // OFF 状态下输出 0V/0A
+        int ret_v = DAC60501_SetVoltageOutput(0.0f);
+        int ret_i = DAC60501_SetCurrentOutput(0.0f);
+        dac_ret = (ret_v != 0 || ret_i != 0) ? -3 : 0;
+      }
+
       if (dac_ret == -1) {
         OLED_ShowString(0, 54, (uint8_t *)"V-DAC ERR!       ", 8, 1);
       } else if (dac_ret == -2) {
