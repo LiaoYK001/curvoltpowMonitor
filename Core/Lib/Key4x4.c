@@ -41,7 +41,7 @@ const uint16_t col_pins[4] = {
  * @brief  键值映射表
  * @note   - 修改 '#' 为 '.', 'D' 为 'E'(Enter/确认)
  *         - A对应电压设定，B对应电流设定
- *         - C对应Clear全清空,*对应取消Cancel
+ *         - C对应Clear全清空(后续修改为开关),*对应取消Cancel
  *
  */
 const uint16_t keys[16] = {
