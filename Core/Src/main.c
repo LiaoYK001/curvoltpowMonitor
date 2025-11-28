@@ -763,17 +763,24 @@ int main(void)
     // 高频率扫描键盘
     KEY_Scan();
 
-    //on或off按键控制
-    if (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET) // GPIO_PIN_RESET 表示低电平
+    //on或off按键控制（非阻塞，带去抖动）
     {
-      HAL_Delay(20); // 1.延时20毫秒以消除机械抖动
-      // 2. 再次确认按键是否仍然被按下
-      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_RESET)
+      static uint8_t button_was_pressed = 0;
+      if (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET) // GPIO_PIN_RESET 表示低电平
       {
-        // 3. 执行翻转PB9电平的操作
-        HAL_GPIO_TogglePin(switch_vcc_GPIO_Port, switch_vcc_Pin);
-        // 4. 等待按键松开，防止长按时连续翻转
-        while (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET);
+        if (!button_was_pressed)
+        {
+          HAL_Delay(20); // 去抖动
+          if (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET)
+          {
+            HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
+            button_was_pressed = 1;
+          }
+        }
+      }
+      else
+      {
+        button_was_pressed = 0;
       }
     }
     if (Key_IsPressed()) {
