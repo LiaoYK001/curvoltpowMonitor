@@ -511,8 +511,8 @@ int main(void)
   
   //PB9 置高
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET)    ; // CC LED ON   
-  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET)    ; // CV LED ON
+  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON   
+  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
   char dac_msg[32];
   uint8_t diag_line = 30; // 诊断信息起始行
 
