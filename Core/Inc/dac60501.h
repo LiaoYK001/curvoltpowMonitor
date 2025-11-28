@@ -78,7 +78,7 @@ int DAC60501_SetVoltage_Addr(uint8_t dev_addr, float vout, float vref);
 int DAC60501_RefAlarm_Addr(uint8_t dev_addr);
 
 /* 高层应用接口 */
-int DAC60501_SetVoltageOutput(float voltage); // 设置电压输出(通过0x48)
+int DAC60501_SetVoltageOutput(float voltage,float current_ma); // 设置电压输出(通过0x48)
 int DAC60501_SetCurrentOutput(float current); // 设置电流输出(通过0x49)
 int DAC60501_SetVoltage(float vout, float vref);
 int DAC60501_RefAlarm(void);

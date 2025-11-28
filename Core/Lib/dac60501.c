@@ -173,7 +173,7 @@ int DAC60501_SetVoltage_Addr(uint8_t dev_addr, float vout, float vref) {
  * @param  voltage: 目标电压 0~16V
  * @retval 0: 成功, <0: 失败
  */
-int DAC60501_SetVoltageOutput(float voltage) {
+int DAC60501_SetVoltageOutput(float voltage,float current_ma) {
   // 限幅
   if (voltage < 0.0f)
     voltage = 0.0f;
@@ -181,8 +181,18 @@ int DAC60501_SetVoltageOutput(float voltage) {
     voltage = MAX_VOLTAGE;
 
   // 线性映射: voltage(0~16V) -> DAC_Vout(0~2.5V)
-  float dac_vout = (voltage / MAX_VOLTAGE) * DAC_VOUT_MAX;
+  //float dac_vout = (voltage / MAX_VOLTAGE) * DAC_VOUT_MAX;
 
+  //有无负载输出电压会有0.0几V的区别，故采用两种映射关系
+  float dac_vout = 0.0f;
+  if(current_ma > 0.10f)
+  {
+   dac_vout = (voltage / (-9.0f))+2.0f;
+  }
+  else
+  {
+    dac_vout = (voltage / (-9.0f))+2.0f+0.005f;
+  }
   return DAC60501_SetVoltage_Addr(DAC_VOLTAGE_ADDR, dac_vout, DAC_VREF);
 }
 
@@ -199,7 +209,7 @@ int DAC60501_SetCurrentOutput(float current) {
     current = MAX_CURRENT;
 
   // 线性映射: current(0~1A) -> DAC_Vout(0~2.5V)
-  float dac_vout = (current / MAX_CURRENT) * DAC_VOUT_MAX;
-
+  //float dac_vout = (current / MAX_CURRENT) * DAC_VOUT_MAX;
+  float dac_vout = current * 5.00f; // 0~1A 对应 0~2.5V
   return DAC60501_SetVoltage_Addr(DAC_CURRENT_ADDR, dac_vout, DAC_VREF);
 }
