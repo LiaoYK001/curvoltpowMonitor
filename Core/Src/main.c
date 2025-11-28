@@ -773,7 +773,7 @@ int main(void)
         // 3. 执行翻转PB9电平的操作
         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
         // 4. 等待按键松开，防止长按时连续翻转
-        while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8) == GPIO_PIN_RESET);
+        while (HAL_GPIO_ReadPin(on_off_switch_GPIO_Port, on_off_switch_Pin) == GPIO_PIN_RESET);
       }
     }
     if (Key_IsPressed()) {
