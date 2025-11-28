@@ -500,7 +500,7 @@ int main(void) {
   uint8_t codecyh[10] = "23211288";
   OLED_Clear();
   OLED_Refresh();
-  OLED_CN(28, 6, 6, 12, 1, 1);
+  OLED_CN(28, 6, 6, 12, 1, 1); // 主标题
   OLED_CN(0, 20, 4, 12, 1, 2);
   OLED_ShowString(50, 20, codehyz, 12, 1);
   OLED_CN(0, 36, 4, 12, 1, 3);
@@ -515,9 +515,9 @@ int main(void) {
   int ret = ina260_init_default(INA260_SLAVE_ADDRESS);
 
   OLED_Clear();
-  OLED_CN(28, 6, 6, 12, 1, 1);
+  OLED_CN(28, 6, 6, 12, 1, 1); // 主标题
   if (ret == INA_STATUS_OK) {
-    OLED_ShowString(0, 24, (uint8_t *)"INA260 OK", 16, 1);
+    // OLED_ShowString(0, 24, (uint8_t *)"INA260 OK", 16, 1);
 
     // 配置工作模式
     // operating_type: iotPower (default) - 同时测电流和电压
@@ -533,8 +533,9 @@ int main(void) {
     OLED_ShowString(0, 24, (uint8_t *)"INA260 ERR", 16, 1);
   }
   OLED_Refresh();
-  HAL_Delay(1500);
+  HAL_Delay(500);
 
+  /*
   // ============ DAC60501 开机自检 ============
   OLED_Clear();
   OLED_CN(28, 6, 6, 12, 1, 1); // 显示标题
@@ -543,9 +544,9 @@ int main(void) {
   HAL_Delay(1000);
 
   // PB9 置高
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON
-  HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
+  // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  // HAL_GPIO_WritePin(GPIOA, CC_LED_Pin, GPIO_PIN_SET); // CC LED ON
+  // HAL_GPIO_WritePin(GPIOA, CV_LED_Pin, GPIO_PIN_SET); // CV LED ON
   char dac_msg[32];
   uint8_t diag_line = 30; // 诊断信息起始行
 
@@ -774,6 +775,7 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(2000); // 显示诊断结果2秒
   // ============ DAC诊断结束 ============
+*/
 
   // LED7显示
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_SET);
