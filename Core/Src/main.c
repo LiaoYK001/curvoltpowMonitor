@@ -535,7 +535,7 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(500);
 
-  /*
+  
   // ============ DAC60501 开机自检 ============
   OLED_Clear();
   OLED_CN(28, 6, 6, 12, 1, 1); // 显示标题
@@ -738,7 +738,7 @@ int main(void) {
   // }
 
   // 恢复0V输出 - 修改为两个DAC
-  DAC60501_SetVoltageOutput(0.0f);
+  DAC60501_SetVoltageOutput(0.0f,0.00f);
   DAC60501_SetCurrentOutput(0.0f);
 
   // ========== 最终结果 ==========
@@ -775,7 +775,6 @@ int main(void) {
   OLED_Refresh();
   HAL_Delay(2000); // 显示诊断结果2秒
   // ============ DAC诊断结束 ============
-*/
 
   // LED7显示
   HAL_GPIO_WritePin(a7led_GPIO_Port, a7led_Pin, GPIO_PIN_SET);
