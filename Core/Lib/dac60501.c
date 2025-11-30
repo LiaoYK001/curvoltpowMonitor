@@ -114,7 +114,13 @@ int DAC60501_SetGain_Addr(uint8_t dev_addr, uint8_t ref_div,
   return 0;
 }
 
-/* 检查 REF-ALARM */
+/*
+检查 REF-ALARM
+返回值	含义
+-1	I2C 通信失败
+0	  参考电压正常
+1	  参考电压报警
+*/
 int DAC60501_RefAlarm_Addr(uint8_t dev_addr) {
   uint16_t s = DAC60501_ReadStatus_Addr(dev_addr);
   if (s == 0xFFFF)
@@ -147,15 +153,21 @@ int DAC60501_SetVoltage_Addr(uint8_t dev_addr, float vout, float vref) {
   float ratio = 0.0f;
   if (vmax > 0.0f)
     ratio = vout / (vref_eff * gain);
-  uint32_t code = (uint32_t)(ratio * (float)maxcode + 0.5f);
+  uint32_t code =
+      (uint32_t)(ratio * (float)maxcode + 0.5f); // 加 0.5 实现四舍五入
   if (code > maxcode)
     code = maxcode;
 
+  // 最终编码左移4位写入 DAC_DATA 寄存器（DAC60501 的数据格式要求高12位有效）。
   uint16_t regval = (uint16_t)(code << 4);
 
   I2C_WriteByte_Addr(dev_addr, DAC_DATA, regval);
   HAL_Delay(1);
 
+  /*
+  然后检查参考电压报警状态。如果检测到报警（返回1==alarm），说明输出可能超出有效范围，返回
+  -2；通信失败返回 -3；正常返回 0
+  */
   int alarm = DAC60501_RefAlarm_Addr(dev_addr);
   if (alarm == 1) {
     return -2;
@@ -173,7 +185,7 @@ int DAC60501_SetVoltage_Addr(uint8_t dev_addr, float vout, float vref) {
  * @param  voltage: 目标电压 0~16V
  * @retval 0: 成功, <0: 失败
  */
-int DAC60501_SetVoltageOutput(float voltage,float current_ma) {
+int DAC60501_SetVoltageOutput(float voltage, float current_ma) {
   // 限幅
   if (voltage < 0.0f)
     voltage = 0.0f;
@@ -181,17 +193,14 @@ int DAC60501_SetVoltageOutput(float voltage,float current_ma) {
     voltage = MAX_VOLTAGE;
 
   // 线性映射: voltage(0~16V) -> DAC_Vout(0~2.5V)
-  //float dac_vout = (voltage / MAX_VOLTAGE) * DAC_VOUT_MAX;
+  // float dac_vout = (voltage / MAX_VOLTAGE) * DAC_VOUT_MAX;
 
-  //有无负载输出电压会有0.0几V的区别，故采用两种映射关系
+  // 有无负载输出电压会有0.0几V的区别，故采用两种映射关系
   float dac_vout = 0.0f;
-  if(current_ma > 0.01f)
-  {
-   dac_vout = (voltage / (-9.0f))+2.0f;
-  }
-  else
-  {
-    dac_vout = (voltage / (-9.0f))+2.0f+0.005f;
+  if (current_ma > 0.01f) {
+    dac_vout = (voltage / (-9.0f)) + 2.0f;
+  } else {
+    dac_vout = (voltage / (-9.0f)) + 2.0f + 0.005f;
   }
   return DAC60501_SetVoltage_Addr(DAC_VOLTAGE_ADDR, dac_vout, DAC_VREF);
 }
@@ -209,7 +218,7 @@ int DAC60501_SetCurrentOutput(float current) {
     current = MAX_CURRENT;
 
   // 线性映射: current(0~1A) -> DAC_Vout(0~2.5V)
-  //float dac_vout = (current / MAX_CURRENT) * DAC_VOUT_MAX;
-  float dac_vout = current * 2.50f+0.005f; // 0~1A 对应 0~2.5V
+  // float dac_vout = (current / MAX_CURRENT) * DAC_VOUT_MAX;
+  float dac_vout = current * 2.50f + 0.005f; // 0~1A 对应 0~2.5V
   return DAC60501_SetVoltage_Addr(DAC_CURRENT_ADDR, dac_vout, DAC_VREF);
 }
