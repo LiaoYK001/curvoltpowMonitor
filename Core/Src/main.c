@@ -594,6 +594,7 @@ int main(void) {
   OLED_ShowString(0, diag_line, (uint8_t *)dac_msg, 8, 1);
   OLED_Refresh();
   HAL_Delay(1000);
+  
   // ========== 下一页 ==========
   OLED_Clear();
   diag_line = 0;

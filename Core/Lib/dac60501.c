@@ -185,7 +185,7 @@ int DAC60501_SetVoltageOutput(float voltage,float current_ma) {
 
   //有无负载输出电压会有0.0几V的区别，故采用两种映射关系
   float dac_vout = 0.0f;
-  if(current_ma > 0.10f)
+  if(current_ma > 0.01f)
   {
    dac_vout = (voltage / (-9.0f))+2.0f;
   }
@@ -210,6 +210,6 @@ int DAC60501_SetCurrentOutput(float current) {
 
   // 线性映射: current(0~1A) -> DAC_Vout(0~2.5V)
   //float dac_vout = (current / MAX_CURRENT) * DAC_VOUT_MAX;
-  float dac_vout = current * 5.00f; // 0~1A 对应 0~2.5V
+  float dac_vout = current * 2.50f+0.005f; // 0~1A 对应 0~2.5V
   return DAC60501_SetVoltage_Addr(DAC_CURRENT_ADDR, dac_vout, DAC_VREF);
 }
