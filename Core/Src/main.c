@@ -107,7 +107,7 @@ static void Display_Input_Prompt(void);
 static uint8_t Validate_And_Set_Value(void);
 static void Process_Encoder(void);
 static int Update_DAC_Outputs(float current_ma); // 更新DAC输出函数声明
-static void Toggle_Output(void);     // 切换输出状态函数声明
+static void Toggle_Output(void);                 // 切换输出状态函数声明
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -429,7 +429,7 @@ static void Process_Key_Input(char key) {
  * @retval 0: 全部成功, -1: 电压DAC失败, -2: 电流DAC失败, -3: 全部失败
  */
 static int Update_DAC_Outputs(float current_ma) {
-  int ret_v = DAC60501_SetVoltageOutput(SetVoltage,current_ma);
+  int ret_v = DAC60501_SetVoltageOutput(SetVoltage, current_ma);
   int ret_i = DAC60501_SetCurrentOutput(SetCurrent);
 
   // 返回错误码
@@ -965,7 +965,7 @@ int main(void) {
         dac_ret = Update_DAC_Outputs(current_ma);
       } else {
         // OFF 状态下输出 0V/0A
-        int ret_v = DAC60501_SetVoltageOutput(0.0f,0.00f);
+        int ret_v = DAC60501_SetVoltageOutput(0.0f, 0.00f);
         int ret_i = DAC60501_SetCurrentOutput(0.0f);
         dac_ret = (ret_v != 0 || ret_i != 0) ? -3 : 0;
       }
